@@ -122,8 +122,14 @@ namespace cppcms { namespace templates {
        		, failed_(0) {}
 	
 	parser& parser::try_token(const std::string& token) {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find token '" << token << "' at '" << input_.substr(index_, 20) << "'\n";
+#endif
 		if(!failed_ && input_.length()-index_ >= token.length() && input_.compare(index_, token.length(), token) == 0) {
 			stack_.emplace_back(state_t { index_, token });
+#ifdef PARSER_DEBUG
+			std::cout << ">>> token " << stack_.back().token << std::endl;
+#endif
 			index_ += token.length();
 		} else {
 			failed_ ++;
@@ -133,12 +139,18 @@ namespace cppcms { namespace templates {
 
 	/* NAME is a sequence of Latin letters, digits and underscore starting with a letter. They represent identifiers and can be defined by regular expression such as: [a-zA-Z][a-zA-Z0-9_]* */
 	parser& parser::try_name() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find name at '" << input_.substr(index_, 20) << "'\n";
+#endif
 		if(!failed_ && index_ < input_.length()) {
 			size_t start = index_;
 			if(is_latin_letter(input_[index_])) {
 				index_++;
 				for(;index_ < input_.length() && ( is_latin_letter(input_[index_]) || is_digit(input_[index_]) || input_[index_] == '_'); ++index_);
 				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_]) });
+#ifdef PARSER_DEBUG
+				std::cout << ">>> name " << stack_.back().token << std::endl;
+#endif
 			} else {
 				failed_ ++;
 			}
@@ -149,11 +161,15 @@ namespace cppcms { namespace templates {
 	}
 
 	parser& parser::try_string() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find string at '" << input_.substr(index_, 20) << "'\n";
+#endif
 		if(!failed_ && index_ < input_.length()) {
 			size_t start = index_;
 			if(input_[index_] == '"') {
 				bool escaped = false;
-				for(; index_ < input_.length() && input_[index_] != '"' && !escaped; ++index_) {
+				++index_;
+				for(; index_ < input_.length() && (input_[index_] != '"' || escaped); ++index_) {
 					if(escaped)
 						escaped = false;
 					else if(input_[index_] == '\\') 
@@ -164,9 +180,15 @@ namespace cppcms { namespace templates {
 					raise("expected \", found EOF instead");
 				} else {
 					stack_.emplace_back(state_t { start, decode_escaped_string(std::string(&input_[start+1], &input_[index_])) });
+#ifdef PARSER_DEBUG
+				std::cout << ">>> string " << stack_.back().token << std::endl;
+#endif
 					index_++; // move to next character, past '"'
 				}
 			} else {
+#ifdef PARSER_DEBUG
+				std::cout << ">>> string failed at " << index_ << std::endl;
+#endif
 				failed_++;
 			}
 		} else {
@@ -177,6 +199,9 @@ namespace cppcms { namespace templates {
 
 	// NUMBER is a number -- sequence of digits that may start with - and include .. It can be defined by the regular expression: \-?\d+(\.\d*)?
 	parser& parser::try_number() {		
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find number at '" << input_.substr(index_, 20) << "'\n";
+#endif
 		if(!failed_ && index_ < input_.length()) {
 			size_t start = index_;
 			if(input_[index_] >= '0' && input_[index_] <= '9') {
@@ -186,6 +211,9 @@ namespace cppcms { namespace templates {
 						dot = true;
 				}
 				stack_.emplace_back(state_t{ start, std::string(&input_[start], &input_[index_]) });				
+#ifdef PARSER_DEBUG
+				std::cout << ">>> string " << stack_.back().token << std::endl;
+#endif
 			} else {
 				failed_++;
 			}
@@ -198,8 +226,10 @@ namespace cppcms { namespace templates {
 	// VARIABLE is non-empty sequence of NAMES separated by dot "." or "->" that may optionally end with () or begin with * for 
 	// identification of function call result. No blanks are allowed. For example: data->point.x, something.else() *foo.bar.	
 	parser& parser::try_variable() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find var at '" << input_.substr(index_, 20) << "'\n";
+#endif
 		if(!failed_ && index_ < input_.length()) {
-			push();
 			auto stack_copy = stack_;
 			size_t start = index_, end = index_;
 
@@ -214,10 +244,10 @@ namespace cppcms { namespace templates {
 				} else if(right >= 2 && input_[index_] == '-' && input_[index_+1] == '>') {
 					index_ += 2;
 				} else {
-					reset();
 					break;
 				}
 			}
+			back(1); // remove 
 			
 			std::swap(stack_, stack_copy);
 			
@@ -227,22 +257,54 @@ namespace cppcms { namespace templates {
 				// parse () at the end
 				if(right >= 2 && input_[end] == '(' && input_[end+1] == ')') 
 					end += 2;
-				
 				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+#ifdef PARSER_DEBUG
+				std::cout << ">>> var " << stack_.back().token << std::endl;
+#endif
 				index_ = end;
 			} else {
 				failed_ ++;
 			}
 
-			pop();
 		} else {
 			failed_ ++;
+		}
+		return *this;
+	}
+
+	parser& parser::try_complex_variable() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find cvar at '" << input_.substr(index_, 20) << "'\n";
+#endif
+		if(!failed_ && index_ < input_.length()) {
+			push();
+			size_t start = index_, end = index_;
+			if(try_variable()) {
+				end = index_;
+				while(skipws(false).try_token("|").skipws(false).try_filter()) { 
+					end = index_;
+				}
+				
+				back(4);
+				pop();
+				
+				stack_.emplace_back(state_t {start, std::string(&input_[start], &input_[end]) });				
+#ifdef PARSER_DEBUG
+				std::cout << ">>> complex " << stack_.back().token << std::endl;
+#endif
+				index_  = end;
+			} 
+		} else {
+			failed_++;
 		}
 		return *this;
 	}	
 
 	// IDENTIFIER is a sequence of NAME separated by the symbol ::. No blanks are allowed. For example: data::page
 	parser& parser::try_identifier() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find id at '" << input_.substr(index_, 20) << "'\n";
+#endif
 		if(!failed_ && index_ < input_.length()) {
 			auto stack_copy = stack_;
 			push();
@@ -261,6 +323,9 @@ namespace cppcms { namespace templates {
 			std::swap(stack_, stack_copy);
 			if(end != start) {
 				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+#ifdef PARSER_DEBUG
+				std::cout << ">>> id " << stack_.back().token << std::endl;
+#endif
 				index_ = end;
 			} else {
 				failed_++;
@@ -269,6 +334,50 @@ namespace cppcms { namespace templates {
 			pop();
 		} else {
 			failed_++;
+		}
+		return *this;
+	}
+	// [ 'ext' ] NAME [ '(' ( VARIABLE | STRING | NUMBER ) [ ',' ( VARIABLE | STRING | NUMBER ) ] ... ]
+	parser& parser::try_filter() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find filter at '" << input_.substr(index_, 20) << "'\n";
+#endif
+		if(!failed_ && index_ < input_.length()) {
+			size_t start = index_;
+			if(try_token_ws("ext")) {
+			} else {
+				back(2);
+			}
+			if(try_name()) {
+				if(try_token("(")) {
+					bool closed = false;
+					while(!closed) {
+						skipws(false);
+						if(try_variable()) {
+						} else if(back(1).try_string()) {
+						} else if(back(1).try_number()) {
+						} else {
+							raise("expected ')', string, number or variable");
+						}
+						
+						if(try_token(")")) {
+							break;
+						} else if(!back(1).skipws(false).try_token(",")) {
+							raise("expected ','");
+						}
+					}
+				} else {
+					back(1);
+				}
+				stack_.emplace_back(state_t { start, std::string(&input_[start],&input_[index_]) });
+#ifdef PARSER_DEBUG
+				std::cout << ">>> filter " << stack_.back().token << std::endl;
+#endif
+			} else {
+				failed_++;
+			}
+		} else {
+			failed_ ++;
 		}
 		return *this;
 	}
@@ -324,7 +433,9 @@ namespace cppcms { namespace templates {
 			const size_t start = index_;
 			for(;index_ < input_.length() && std::isspace(input_[index_]); ++index_);
 			stack_.emplace_back( state_t { start, input_.substr(start, index_ - start) });
-
+#ifdef PARSER_DEBUG
+			std::cout << ">>> skipws from " << start << " to " << index_ << std::endl;
+#endif
 			if(require && index_ == start)
 				failed_++;
 		} else {
@@ -336,6 +447,15 @@ namespace cppcms { namespace templates {
 	parser& parser::try_token_ws(const std::string& token) {
 		try_token(token);
 		skipws(true);
+		return *this;
+	}
+
+	parser& parser::try_token_nl(const std::string& token) {
+		try_token(token);
+		if(!failed_) {
+			if(index_ < input_.length() && input_[index_] == '\n')
+				index_++;
+		}
 		return *this;
 	}
 
@@ -352,9 +472,9 @@ namespace cppcms { namespace templates {
 
 
 	void parser::raise(const std::string& msg) {
-		const int context = 10;
+		const int context = 70;
 		const std::string left = ( index_ >= context ? input_.substr(index_ - context, context) : input_.substr(0, index_) );
-		const std::string right = ( index_ + context < input_.size() ? input_.substr(index_+1, context) : input_.substr(index_) );
+		const std::string right = ( index_ + context < input_.size() ? input_.substr(index_, context) : input_.substr(index_) );
 		throw std::runtime_error("Parse error at position " + boost::lexical_cast<std::string>(index_) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
 	}
 
@@ -370,17 +490,22 @@ namespace cppcms { namespace templates {
 		return ( stack_.empty() || stack_.back().index == index_ ) && index_ == input_.length(); 
 	}
 
-	void parser::back(size_t n) {
+	parser& parser::back(size_t n) {
 		if(n > failed_ + stack_.size())
 			throw std::logic_error("Attempt to clear more tokens then stack_.size()+failed_");
 
-		n -= failed_;
-		failed_ = 0;
+		if(n >= failed_) {
+			n -= failed_;
+			failed_ = 0;
 		
-		while(n-- > 0) {
-			index_ = stack_.back().index;
-			stack_.pop_back();
+			while(n-- > 0) {
+				index_ = stack_.back().index;
+				stack_.pop_back();
+			}
+		} else {
+			failed_ -= n;
 		}
+		return *this;
 	}
 
 
@@ -416,22 +541,30 @@ namespace cppcms { namespace templates {
 			});
 		};
 		while(!p.finished() && !p.failed()) {
-			std::cout << "loop\n";
 			p.push();
-			if(p.skip_to("<%=").skipws(true)) { // [ <blah><blah>..., <%=, \s+ ] = 3
-				if(!last_item_was_code || !is_spaces(p.get(-3)))
-					add_html(p.get(-3));
-				if(!try_variable_expression()) {
-					p.raise("expected variable expression");
+			if(p.reset().skip_to("<%")) { // [ <html><blah>..., <% ] = 2
+				if(!last_item_was_code || !is_spaces(p.get(-2))) {
+					size_t pos = p.get(-2).find("%>");
+					if(pos != std::string::npos) {
+						p.back(2).skip_to("%>").back(1).raise("unexpected %>");
+					}
+					add_html(p.get(-2));
 				}
+
+				p.push();
+				if(p.try_token_ws("=")) { // [ <html><blah>..., <%, = ] = 3
+					if(!try_variable_expression()) {
+						p.raise("expected variable expression");
+					}
+				} else if(p.reset().skipws(true)) { // [ <html><blah>..., <%, \s+ ] = 3
+					if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
+						p.raise("expected c++, global, render or flow expression");
+					}
+				}
+				p.pop();
 				last_item_was_code  = true;
-			} else if(p.reset().skip_to("<%").skipws(true)) { // [ <blah><blah>..., <%, \s+ ] = 3
-				if(!last_item_was_code || !is_spaces(p.get(-3)))
-					add_html(p.get(-3));
-				if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
-					p.raise("expected c++, global, render or flow expression");
-				}
-				last_item_was_code = true;
+			} else if(p.reset().skip_to("%>")) {
+				p.reset().raise("found unexpected %>");
 			} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
 				add_html(p.get(-1));
 				last_item_was_code = false;
@@ -460,7 +593,16 @@ namespace cppcms { namespace templates {
 		} else if(p.reset().try_token_ws("separator")) {
 			std::cout << "flow: separator\n";
 		} else if(p.reset().try_token_ws("end")) {
-			std::cout << "flow: end\n";
+			if(p.try_name_ws()) {
+				const std::string name = p.get(-2);
+				std::cout << "flow: end " << name << "\n";
+			} else {
+				std::cout << "flow: end\n";
+				p.back(2);
+			}
+			if(!p.try_token("%>")) {
+				p.raise("expected %> after end [whatever]");
+			}
 		} else if(p.reset().try_token_ws("cache")) {
 			std::cout << "flow: cache\n";
 		} else {
@@ -477,9 +619,9 @@ namespace cppcms { namespace templates {
 		if(p.try_token_ws("skin")) { //  [ skin, \s+ ] 
 			std::string skin_name;
 			p.push();
-			if(p.try_token("%>")) { // [ skin, \s+, %> ]
+			if(p.try_token_nl("%>")) { // [ skin, \s+, %> ]
 				skin_name = "__default__";
-			} else if(p.reset().try_name_ws().try_token("%>")) { // [ skin, \s+, skinname, \s+, %> ]
+			} else if(p.reset().try_name_ws().try_token_nl("%>")) { // [ skin, \s+, skinname, \s+, %> ]
 				skin_name = p.get(-3);
 			} else {
 				p.reset().raise("expected %> or skin name");
@@ -502,7 +644,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.reset().raise("expected view NAME uses IDENTIFIER [extends NAME]");
 			}
-			if(p.try_token("%>")) {
+			if(p.try_token_nl("%>")) {
 				std::cout << "global: view " << view_name << "/" << data_name << "/" << parent_name << "\n";
 			} else {
 				p.reset().raise("expected %> after view definition");
@@ -523,8 +665,25 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_render_expression() {
 		p.push();
-		if(p.try_token_ws("gt")) {
-			std::cout << "render: gt\n";
+		if(p.try_token_ws("gt").try_string_ws()) { // [ gt, \s+, string, \s+ ]
+			const std::string fmt = p.get(-2);
+			std::cout << "render: gt " << fmt << "\n";
+			std::vector<std::string> variables;
+			if(p.try_token_ws("using")) {
+				while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
+					variables.emplace_back(p.get(-1));
+					std::cout << "\tvariable " << p.get(-1) << std::endl;
+					if(!p.skipws(false).try_token(",")) {
+						p.back(2);
+						break;
+					} 
+				}
+			} else {
+				p.back(2);
+			}
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %> after gt expression");
+			}
 		} else if(p.reset().try_token_ws("ngt")) {
 			std::cout << "render: ngt\n";
 		} else if(p.reset().try_token_ws("url")) {

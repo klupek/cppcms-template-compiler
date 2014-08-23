@@ -83,28 +83,36 @@ namespace cppcms { namespace templates {
 		size_t failed_;
 	public:
 		explicit parser(const std::string& input);
+
 		parser& try_token(const std::string& token);
 		parser& try_token_ws(const std::string& token);
-		parser& try_name();
-		parser& try_name_ws();
-		parser& try_string();
-		parser& try_string_ws();
-		parser& try_number();
-		parser& try_number_ws();
-		parser& try_variable();
-		parser& try_variable_ws();
-		parser& try_identifier();
-		parser& try_identifier_ws();
-		parser& skip_to(const std::string& token);
-		parser& skipws(bool require);
-		parser& skip_to_end();
+		parser& try_token_nl(const std::string& token);
+
+
+		parser& try_name(); // -> [ NAME ]
+		parser& try_name_ws(); // -> [ NAME, \s+ ]
+		parser& try_string(); // -> [ STRING, ]
+		parser& try_string_ws(); // -> [ STRING, \s+ ]
+		parser& try_number(); // -> [ NUMBER ]
+		parser& try_number_ws(); // -> [ NUMBER, \s+ ]
+		parser& try_variable(); // -> [ VAR ]
+		parser& try_variable_ws(); // -> [ VAR, \s+ ]
+		parser& try_complex_variable(); // -> [ CVAR ]
+		parser& try_complex_variable_ws(); // -> [ CVAR, \s+ ]
+		parser& try_filter(); // -> [ FILTER ]
+
+		parser& try_identifier(); // -> [ ID ]
+		parser& try_identifier_ws(); // -> [ ID, \s+ ]
+		parser& skip_to(const std::string& token); // -> [ prefix, token ]
+		parser& skipws(bool require); // -> [ \s* ]
+		parser& skip_to_end(); // -> [ ... ]
 		
 		template<typename T=std::string>
 		T get(int n);
 		bool failed() const;
 		bool finished() const;
 		operator bool() const;
-		void back(size_t n);
+		parser& back(size_t n);
 		void raise(const std::string& msg);
 
 		// state
@@ -151,6 +159,8 @@ namespace cppcms { namespace templates {
  * arguments to do: 
  * 	-s (skin name), which replaces __default__ skin name in skin map (compat)
  * 	-m (magic includes, uses data::foobar automagically includes data/foobar.h) (new)
+ * 	-std=relaxed (new)
+ * 	-std=compat (compat)
  */
 
 #endif
