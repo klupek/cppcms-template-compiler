@@ -9,6 +9,10 @@
 <foo><bar>12</bar></foo>
 <%= *foo.bar->baz() %>
 <% gt "you have {1} unread message" using messages.count() %>
+<% url "/blog/summary"  %>
+<% url "../summary"  %>
+<% url "/blog/post" using post_id %>
+<% url "/blog/post" using post_id , slug | ext filter_for_url %>
 <% end template %>
 <% end view %>
 <% end skin %>

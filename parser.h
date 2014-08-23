@@ -140,6 +140,8 @@ namespace cppcms { namespace templates {
 	class template_parser {
 		parser p;
 		ast::root_ptr tree_;
+
+		void parse_using_options(std::vector<std::string>&);
 	public:
 		template_parser(const std::string& input);
 		bool try_flow_expression();

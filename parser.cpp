@@ -683,6 +683,24 @@ namespace cppcms { namespace templates {
 		p.pop();
 		return true;
 	}
+		
+	void template_parser::parse_using_options(std::vector<std::string>& variables) {
+		if(p.try_token_ws("using")) {
+			while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
+				variables.emplace_back(p.get(-1));
+				std::cout << "\tvariable " << p.get(-1) << std::endl;
+				if(!p.skipws(false).try_token(",")) {
+					p.back(2);
+					break;
+				} 
+			}
+			if(!p) { // found ',', but next complex variable was not found
+				p.back(2).raise("expected complex variable");
+			}
+		} else {
+			p.back(2);
+		}
+	}
 
 	bool template_parser::try_render_expression() {
 		p.push();
@@ -690,21 +708,7 @@ namespace cppcms { namespace templates {
 			const std::string fmt = p.get(-2);
 			std::cout << "render: gt " << fmt << "\n";
 			std::vector<std::string> variables;
-			if(p.try_token_ws("using")) {
-				while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
-					variables.emplace_back(p.get(-1));
-					std::cout << "\tvariable " << p.get(-1) << std::endl;
-					if(!p.skipws(false).try_token(",")) {
-						p.back(2);
-						break;
-					} 
-				}
-				if(!p) { // found ',', but next complex variable was not found
-					p.back(2).raise("expected complex variable");
-				}
-			} else {
-				p.back(2);
-			}
+			parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
@@ -713,27 +717,19 @@ namespace cppcms { namespace templates {
 			const std::string plural = p.get(-4);
 			const std::string variable = p.get(-2);
 			std::vector<std::string> variables;
-			std::cout << "ngt " << singular << "/" << plural << "/" << variable << std::endl;
-			if(p.try_token("using")) {
-				while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ] 
-					variables.emplace_back(p.get(-1));
-					std::cout << "\tvariable " << variables.back() << std::endl;
-					if(!p.skipws(false).try_token(",")) {
-						p.back(2);
-						break;
-					}
-				}
-				if(!p) { // found ',', but next complex variable was not found
-					p.back(2).raise("expected complex variable");
-				}
-			} else {
-				p.back(2);
-			}
+			std::cout << "render: ngt " << singular << "/" << plural << "/" << variable << std::endl;
+			parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
-		} else if(p.reset().try_token_ws("url")) {
-			std::cout << "render: url\n";
+		} else if(p.reset().try_token_ws("url").try_string_ws()) { // [ url, \s+, STRING, \s+ ]
+			const std::string url = p.get(-2);
+			std::cout << "render: url " << url << std::endl;
+			std::vector<std::string> variables;
+			parse_using_options(variables);
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %> after gt expression");
+			}
 		} else if(p.reset().try_token_ws("include")) {
 			std::cout << "render: include\n";
 		} else if(p.reset().try_token_ws("form")) {
