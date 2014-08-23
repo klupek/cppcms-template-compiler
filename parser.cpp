@@ -686,7 +686,7 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_render_expression() {
 		p.push();
-		if(p.try_token_ws("gt").try_string_ws()) { // [ gt, \s+, string, \s+ ]
+		if(p.try_token_ws("gt").try_string_ws() || p.back(4).try_token_ws("pgt").try_string_ws()) { // [ gt|pgt, \s+, string, \s+ ]
 			const std::string fmt = p.get(-2);
 			std::cout << "render: gt " << fmt << "\n";
 			std::vector<std::string> variables;

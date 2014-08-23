@@ -26,6 +26,7 @@ blah blah 22
 <!-- filter without arguments; filter with string argument -->
 <% gt "topic: {1}, {2}" using topic.name | uppercase, topic.created | strftime("%d/%m/%Y") %>
 <% ngt "You have one apple", "You have {1} apples, click <a href=\"{2}\">here</a> to eat them", apple_count using apple_count, apple_link | urlencode %>
+<% pgt "You have {1:apple}, click <a href=\"{2}\">here</a> to eat them" using apple_count, apple_link | urlencode %>
 <% end template %>
 <% end view %>
 <% end skin %>
