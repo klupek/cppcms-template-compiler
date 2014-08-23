@@ -298,7 +298,7 @@ namespace cppcms { namespace templates {
 	}
 
 	parser& parser::try_identifier_ws() {
-		try_identifier_ws();
+		try_identifier();
 		skipws(true);
 		return *this;
 	}
@@ -409,21 +409,32 @@ namespace cppcms { namespace templates {
 		
 
 	void template_parser::parse() {
+		bool last_item_was_code = true;
+		auto is_spaces = [](const std::string& input) {
+			return std::all_of(input.begin(), input.end(), [](const char c) {
+				return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+			});
+		};
 		while(!p.finished() && !p.failed()) {
 			std::cout << "loop\n";
 			p.push();
 			if(p.skip_to("<%=").skipws(true)) { // [ <blah><blah>..., <%=, \s+ ] = 3
-				add_html(p.get(-3));
+				if(!last_item_was_code || !is_spaces(p.get(-3)))
+					add_html(p.get(-3));
 				if(!try_variable_expression()) {
 					p.raise("expected variable expression");
 				}
+				last_item_was_code  = true;
 			} else if(p.reset().skip_to("<%").skipws(true)) { // [ <blah><blah>..., <%, \s+ ] = 3
-				add_html(p.get(-3));
+				if(!last_item_was_code || !is_spaces(p.get(-3)))
+					add_html(p.get(-3));
 				if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
 					p.raise("expected c++, global, render or flow expression");
 				}
+				last_item_was_code = true;
 			} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
 				add_html(p.get(-1));
+				last_item_was_code = false;
 			} else {
 				p.reset().raise("expected <%=, <% or EOF");
 			}
@@ -473,11 +484,33 @@ namespace cppcms { namespace templates {
 			} else {
 				p.reset().raise("expected %> or skin name");
 			}
+			p.pop();
 			std::cout << "global: skin " << skin_name << "\n";
-		} else if(p.reset().try_token_ws("view")) {
-			std::cout << "global: view\n";
-		} else if(p.reset().try_token_ws("template")) {
-			std::cout << "global: template\n";
+		} else if(p.reset().try_token_ws("view")) { // [ view ]
+			p.push();
+			std::string view_name, data_name, parent_name;
+			if(p.try_name_ws().try_token_ws("uses").try_identifier_ws()) { // [ view, NAME, \s+ , uses, \s+, IDENTIFIER, \s+]
+				view_name = p.get(-6);
+				data_name = p.get(-2);
+				p.push();
+				if(p.try_token_ws("extends").try_name_ws()) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
+					parent_name = p.get(-2);
+				} else {
+					p.reset();
+				}
+				p.pop();
+			} else {
+				p.reset().raise("expected view NAME uses IDENTIFIER [extends NAME]");
+			}
+			if(p.try_token("%>")) {
+				std::cout << "global: view " << view_name << "/" << data_name << "/" << parent_name << "\n";
+			} else {
+				p.reset().raise("expected %> after view definition");
+			}
+			p.pop();
+		} else if(p.reset().try_token_ws("template").skip_to("%>")) { // [ template, \s+, code  %> ]
+			const std::string function_name = p.get(-2);
+			std::cout << "global: template " << function_name << "\n";
 		} else if(p.reset().try_token_ws("c++").skip_to("%>")) { // [ c++, \s+, cppcode, %> ] = 4
 			add_cpp(p.get(-2));
 		} else {
