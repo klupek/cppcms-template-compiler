@@ -443,6 +443,27 @@ namespace cppcms { namespace templates {
 		}
 		return *this;
 	}
+
+	parser& parser::try_comma() {
+		if(!failed_) {
+			size_t start = index_;
+			skipws(false);
+			try_token(",");
+			skipws(false);
+			if(failed_) {
+				back(3);
+				failed_++;
+			} else {
+				size_t end = index_;
+				back(3);
+				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+				index_ = end;
+			}
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
 	
 	parser& parser::try_token_ws(const std::string& token) {
 		try_token(token);
@@ -678,14 +699,39 @@ namespace cppcms { namespace templates {
 						break;
 					} 
 				}
+				if(!p) { // found ',', but next complex variable was not found
+					p.back(2).raise("expected complex variable");
+				}
 			} else {
 				p.back(2);
 			}
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
-		} else if(p.reset().try_token_ws("ngt")) {
-			std::cout << "render: ngt\n";
+		} else if(p.reset().try_token_ws("ngt").try_string().try_comma().try_string().try_comma().try_variable_ws()) { // [ ngt, \s+, STRING, ',', STRING, ',', VARIABLE, \s+ ]
+			const std::string singular = p.get(-6);
+			const std::string plural = p.get(-4);
+			const std::string variable = p.get(-2);
+			std::vector<std::string> variables;
+			std::cout << "ngt " << singular << "/" << plural << "/" << variable << std::endl;
+			if(p.try_token("using")) {
+				while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ] 
+					variables.emplace_back(p.get(-1));
+					std::cout << "\tvariable " << variables.back() << std::endl;
+					if(!p.skipws(false).try_token(",")) {
+						p.back(2);
+						break;
+					}
+				}
+				if(!p) { // found ',', but next complex variable was not found
+					p.back(2).raise("expected complex variable");
+				}
+			} else {
+				p.back(2);
+			}
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %> after gt expression");
+			}
 		} else if(p.reset().try_token_ws("url")) {
 			std::cout << "render: url\n";
 		} else if(p.reset().try_token_ws("include")) {

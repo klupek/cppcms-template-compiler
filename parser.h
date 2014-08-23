@@ -100,6 +100,7 @@ namespace cppcms { namespace templates {
 		parser& try_complex_variable(); // -> [ CVAR ]
 		parser& try_complex_variable_ws(); // -> [ CVAR, \s+ ]
 		parser& try_filter(); // -> [ FILTER ]
+		parser& try_comma(); // [ ',' ]
 
 		parser& try_identifier(); // -> [ ID ]
 		parser& try_identifier_ws(); // -> [ ID, \s+ ]
@@ -161,6 +162,15 @@ namespace cppcms { namespace templates {
  * 	-m (magic includes, uses data::foobar automagically includes data/foobar.h) (new)
  * 	-std=relaxed (new)
  * 	-std=compat (compat)
+ *
+ * new keywords:
+ * 	pgt
+ * 		old: ngt SINGULAR, PLURAL, VARIABLE [ using ... ]
+ * 			ngt "You have one apple", "You have {1} apples", apple_count using apple_count
+ * 		new: 
+ * 			pgt "You have one {1:apple}" using apple_count
+ * 			needs creating dictionary, maybe cppcms::template_parser::pluralizer, or in config?
+ * 			note: config should contain word => [ [ range, pluralized ] ], so not only english is supported
  */
 
 #endif

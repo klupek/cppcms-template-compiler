@@ -1,0 +1,31 @@
+<% skin %>
+<% view view_name_1 uses data::data_class_1 %>
+<% template vn1_tmpl1() %>
+<blah><blah>11</blah></blah>
+<%= foobar %>
+<% gt "you have no messages" %>
+<% end template %>
+<% template vn1_tmpl2() %>
+<foo><bar>12</bar></foo>
+<%= *foo.bar->baz() %>
+<% gt "you have {1} unread message" using messages.count() %>
+<% end template %>
+<% end view %>
+<% end skin %>
+
+<% skin named_skin %>
+<% view view_name_2 uses data::data_class_2 extends master_view %>
+<% template vn2_tmpl1() %>
+blah blah 21
+<%= *foo.bar->baz() | filter1 %>
+<% gt "click <a href=\"{1}\">here</a> to read {2} unread messages" using messages.link | urlencode, messages.count() %>
+<% end template %>
+<% template vn2_tmpl2() %>
+blah blah 22
+<%= foobar | filter1(42) | filter2(varname, 42, "foobar") %>
+<!-- filter without arguments; filter with string argument -->
+<% gt "topic: {1}, {2}" using topic.name | uppercase, topic.created | strftime("%d/%m/%Y") %>
+<% ngt "You have one apple", "You have {1} apples, click <a href=\"{2}\">here</a> to eat them", apple_count using apple_count, apple_link | urlencode %>
+<% end template %>
+<% end view %>
+<% end skin %>
