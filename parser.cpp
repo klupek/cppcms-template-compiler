@@ -1,12 +1,128 @@
 #include "parser.h"
 namespace cppcms { namespace templates {
+	static bool is_latin_letter(char c) {
+		return ( c >= 'a' && c <= 'z' ) || ( c >= 'A' && c <= 'Z' );
+	}
+
+	static bool is_digit(char c) {
+		return ( c >= '0' && c <= '9' );
+	}
+		
+	static std::string decode_escaped_string(const std::string& input) {
+		std::string result;
+		bool escaped = false;
+		const int hex[256] = 
+			{ -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1, -1, -1, -1, -1, -1, 
+			  -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, 10, 11, 12, 13, 14, 15, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
+			  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+		for(size_t i = 0; i < input.length(); ++i) {
+			char current = input[i];
+			if(escaped) {
+				escaped = false;
+				int value;
+				char o1,o2,o3;
+				switch(current) {					
+					case '\'':
+					case '"':
+					case '?':
+					case '\\':
+						result += current;
+						break;
+					case 'a': result += '\a'; break;
+					case 'b': result += '\b'; break;
+					case 'f': result += '\f'; break;
+					case 'n': result += '\n'; break;
+					case 'r': result += '\r'; break;
+					case 't': result += '\t'; break;
+					case 'v': result += '\v'; break;
+							  							  
+					case 'x':
+						  if(i+2 >= input.length())
+							  throw std::runtime_error("Invalid escape sequence: " + std::string(&input[i-1], &input[input.length()-1]));
+						  value = hex[static_cast<int>(input[i+1])]*16 + hex[static_cast<int>(input[i+2])];
+						  if(value < 0)
+							  throw std::runtime_error("Invalid escape sequence: " + std::string(&input[i-1], &input[i+3]));
+						  result += static_cast<char>(value);
+						  break;
+					// TODO: unicode characters
+					default:
+						if(input[i] >= '0' && input[i] <= '7') {
+							if(i+3 >= input.length())
+								throw std::runtime_error("Invalid escape sequence: " + std::string(&input[i-1], &input[input.length()-1]));
+							o1 = input[i+1], o2 = input[i+2], o3 = input[i+3];
+							if(o2 >= '0' && o2 <= '7' && o3 >= '0' && o3 <= '7') {
+								o1 -= '0'; o2 -= '0'; o3 -= '0';
+								result += static_cast<char>(o1*64+o2*8+o3);
+							} else {
+								throw std::runtime_error("Invalid escape sequence: " + std::string(&input[i-1], &input[i+4]));
+							}
+						} else {
+							result += '\\';
+							result += current;
+						}
+						break;
+				}
+			} else if(input[i] == '\\') {
+				escaped = true;
+			} else {
+				result += current;
+			}
+		}
+		if(escaped)
+			result += '\\';
+		return result;
+	}
+	
+	static std::string compress_html(const std::string& input) {
+		std::string result(input.length()*2, 0);
+		char translate[255] = { 0 };
+		translate[static_cast<unsigned int>('\a')] = 'a';
+		translate[static_cast<unsigned int>('\b')] = 'b'; 
+		translate[static_cast<unsigned int>('\f')] = 'f';
+		translate[static_cast<unsigned int>('\n')] = 'n';
+		translate[static_cast<unsigned int>('\r')] = 'r';
+		translate[static_cast<unsigned int>('\t')] = 't';
+		translate[static_cast<unsigned int>('\v')] = 'v';
+		const char hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+		for(const char c : input) {
+			if(std::isprint(c)) {
+				result += c;
+			} else if(translate[static_cast<int>(c)] > 0) {
+				result += '\\';
+				result += translate[static_cast<unsigned char>(c)];
+			} else if(c == '\'' || c == '"' || c == '\\') {
+				result += '\\';
+				result += c;
+			} else {
+				result += '\\';
+				result += 'x';
+				result += hex[static_cast<unsigned char>(c)/16];
+				result += hex[static_cast<unsigned char>(c)%16];
+			}
+		}
+		return result;
+	}
+
 	parser::parser(const std::string& input)
 		: input_(input)
 		, index_(0)
        		, failed_(0) {}
 	
 	parser& parser::try_token(const std::string& token) {
-		if(!failed_ && input_.length() >= token.length() && input_.compare(index_, token.length(), token) == 0) {
+		if(!failed_ && input_.length()-index_ >= token.length() && input_.compare(index_, token.length(), token) == 0) {
 			stack_.emplace_back(state_t { index_, token });
 			index_ += token.length();
 		} else {
@@ -14,6 +130,226 @@ namespace cppcms { namespace templates {
 		}
 		return *this;
 	}
+
+	/* NAME is a sequence of Latin letters, digits and underscore starting with a letter. They represent identifiers and can be defined by regular expression such as: [a-zA-Z][a-zA-Z0-9_]* */
+	parser& parser::try_name() {
+		if(!failed_ && index_ < input_.length()) {
+			size_t start = index_;
+			if(is_latin_letter(input_[index_])) {
+				index_++;
+				for(;index_ < input_.length() && ( is_latin_letter(input_[index_]) || is_digit(input_[index_]) || input_[index_] == '_'); ++index_);
+				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_]) });
+			} else {
+				failed_ ++;
+			}
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
+
+	parser& parser::try_string() {
+		if(!failed_ && index_ < input_.length()) {
+			size_t start = index_;
+			if(input_[index_] == '"') {
+				bool escaped = false;
+				for(; index_ < input_.length() && input_[index_] != '"' && !escaped; ++index_) {
+					if(escaped)
+						escaped = false;
+					else if(input_[index_] == '\\') 
+						escaped = true;
+				}
+				if(index_ == input_.length()) { // '"' was not found
+					index_ = start;
+					raise("expected \", found EOF instead");
+				} else {
+					stack_.emplace_back(state_t { start, decode_escaped_string(std::string(&input_[start+1], &input_[index_])) });
+					index_++; // move to next character, past '"'
+				}
+			} else {
+				failed_++;
+			}
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
+
+	// NUMBER is a number -- sequence of digits that may start with - and include .. It can be defined by the regular expression: \-?\d+(\.\d*)?
+	parser& parser::try_number() {		
+		if(!failed_ && index_ < input_.length()) {
+			size_t start = index_;
+			if(input_[index_] >= '0' && input_[index_] <= '9') {
+				bool dot = false;
+				for(; (input_[index_] >= '0' && input_[index_] <= '9') || (!dot && input_[index_] == '.'); ++index_) {
+					if(input_[index_] == '.')
+						dot = true;
+				}
+				stack_.emplace_back(state_t{ start, std::string(&input_[start], &input_[index_]) });				
+			} else {
+				failed_++;
+			}
+		} else { 
+			failed_++;
+		}
+		return *this;
+	}
+
+	// VARIABLE is non-empty sequence of NAMES separated by dot "." or "->" that may optionally end with () or begin with * for 
+	// identification of function call result. No blanks are allowed. For example: data->point.x, something.else() *foo.bar.	
+	parser& parser::try_variable() {
+		if(!failed_ && index_ < input_.length()) {
+			push();
+			auto stack_copy = stack_;
+			size_t start = index_, end = index_;
+
+			// parse *name((\.|->)name)
+			if(input_[index_] == '*')
+				index_++;
+			while(try_name()) {
+				const size_t right = input_.length() - index_;
+				end = index_;
+				if(right >= 1 && input_[index_] == '.') {
+					index_ ++;
+				} else if(right >= 2 && input_[index_] == '-' && input_[index_+1] == '>') {
+					index_ += 2;
+				} else {
+					reset();
+					break;
+				}
+			}
+			
+			std::swap(stack_, stack_copy);
+			
+			if(end != start) {
+				const size_t right = input_.length() - end;
+				
+				// parse () at the end
+				if(right >= 2 && input_[end] == '(' && input_[end+1] == ')') 
+					end += 2;
+				
+				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+				index_ = end;
+			} else {
+				failed_ ++;
+			}
+
+			pop();
+		} else {
+			failed_ ++;
+		}
+		return *this;
+	}	
+
+	// IDENTIFIER is a sequence of NAME separated by the symbol ::. No blanks are allowed. For example: data::page
+	parser& parser::try_identifier() {
+		if(!failed_ && index_ < input_.length()) {
+			auto stack_copy = stack_;
+			push();
+			size_t start = index_, end = index_;
+
+			while(try_name()) {
+				const size_t right = input_.length() - index_;
+				end = index_;
+				if(right >= 2 && input_[index_] == ':' && input_[index_+1] == ':') {
+					index_ += 2;
+				} else {
+					reset();
+					break;
+				}
+			}
+			std::swap(stack_, stack_copy);
+			if(end != start) {
+				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+				index_ = end;
+			} else {
+				failed_++;
+			}
+
+			pop();
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
+
+	parser& parser::try_name_ws() {
+		try_name();
+		skipws(true);
+		return *this;
+	}
+	
+	parser& parser::try_string_ws() {
+		try_string();
+		skipws(true);
+		return *this;
+	}
+	
+	parser& parser::try_number_ws() {
+		try_number();
+		skipws(true);
+		return *this;
+	}
+
+	parser& parser::try_variable_ws() {
+		try_variable();
+		skipws(true);
+		return *this;
+	}
+
+	parser& parser::try_identifier_ws() {
+		try_identifier_ws();
+		skipws(true);
+		return *this;
+	}
+
+	parser& parser::skip_to(const std::string& token) {
+		if(!failed_ && index_ < input_.length()) {
+			size_t r = input_.find(token, index_);
+			if(r == std::string::npos) {
+				failed_ +=2;
+			} else {
+				stack_.emplace_back(state_t { index_, input_.substr(index_, r - index_) } );
+				stack_.emplace_back(state_t { r, token });
+				index_ = r + token.length();
+			}
+		} else {
+			failed_+=2;
+		}
+		return *this;
+	}
+
+	parser& parser::skipws(bool require) {
+		if(!failed_ && index_ < input_.length()) {
+			const size_t start = index_;
+			for(;index_ < input_.length() && std::isspace(input_[index_]); ++index_);
+			stack_.emplace_back( state_t { start, input_.substr(start, index_ - start) });
+
+			if(require && index_ == start)
+				failed_++;
+		} else {
+			failed_ ++;
+		}
+		return *this;
+	}
+	
+	parser& parser::try_token_ws(const std::string& token) {
+		try_token(token);
+		skipws(true);
+		return *this;
+	}
+
+	parser& parser::skip_to_end() {
+		if(!failed_) {
+			stack_.emplace_back( state_t { index_, input_.substr(index_) });
+			index_ = input_.length();
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
+
+
 
 	void parser::raise(const std::string& msg) {
 		const int context = 10;
@@ -47,45 +383,6 @@ namespace cppcms { namespace templates {
 		}
 	}
 
-	parser& parser::skip_to(const std::string& token) {
-		if(!failed_) {
-			size_t r = input_.find(token, index_);
-			if(r == std::string::npos) {
-				failed_ ++;
-			} else {
-				stack_.emplace_back(state_t { index_, input_.substr(index_, r - index_) } );
-				stack_.emplace_back(state_t { r, token });
-				index_ = r + token.length();
-			}
-		}
-		return *this;
-	}
-
-	parser& parser::skipws(bool require) {
-		if(!failed_) {
-			const size_t start = index_;
-			for(;index_ < input_.length() && std::isspace(input_[index_]); ++index_);
-			stack_.emplace_back( state_t { start, input_.substr(start, index_ - start) });
-
-			if(require && index_ == start)
-				failed_++;
-		}
-		return *this;
-	}
-	
-	parser& parser::try_token_ws(const std::string& token) {
-		try_token(token);
-		skipws(true);
-		return *this;
-	}
-
-	parser& parser::skip_to_end() {
-		if(!failed_) {
-			stack_.emplace_back( state_t { index_, input_.substr(index_) });
-			index_ = input_.length();
-		}
-		return *this;
-	}
 
 	void parser::push() {
 		state_stack_.push({index_,failed_});
@@ -107,7 +404,8 @@ namespace cppcms { namespace templates {
 	}
 
 	template_parser::template_parser(const std::string& input)
-		: p(input) {}
+		: p(input) 
+		, tree_(std::make_shared<ast::root_t>()) {}
 		
 
 	void template_parser::parse() {
@@ -133,7 +431,7 @@ namespace cppcms { namespace templates {
 		}
 	}
 
-	parser& template_parser::try_flow_expression() {
+	bool template_parser::try_flow_expression() {
 		p.push();
 
 		if(p.try_token_ws("if")) {
@@ -154,30 +452,43 @@ namespace cppcms { namespace templates {
 			std::cout << "flow: end\n";
 		} else if(p.reset().try_token_ws("cache")) {
 			std::cout << "flow: cache\n";
-		} else
+		} else {
 			p.reset();
+			return false;
+		}
 		p.pop();
-		return p;
+		return true;
 	}
 
-	parser& template_parser::try_global_expression() {
+	bool template_parser::try_global_expression() {
 		p.push();
 
-		if(p.try_token_ws("skin")) {
-			std::cout << "global: skin\n";
+		if(p.try_token_ws("skin")) { //  [ skin, \s+ ] 
+			std::string skin_name;
+			p.push();
+			if(p.try_token("%>")) { // [ skin, \s+, %> ]
+				skin_name = "__default__";
+			} else if(p.reset().try_name_ws().try_token("%>")) { // [ skin, \s+, skinname, \s+, %> ]
+				skin_name = p.get(-3);
+			} else {
+				p.reset().raise("expected %> or skin name");
+			}
+			std::cout << "global: skin " << skin_name << "\n";
 		} else if(p.reset().try_token_ws("view")) {
 			std::cout << "global: view\n";
 		} else if(p.reset().try_token_ws("template")) {
 			std::cout << "global: template\n";
 		} else if(p.reset().try_token_ws("c++").skip_to("%>")) { // [ c++, \s+, cppcode, %> ] = 4
+			add_cpp(p.get(-2));
 		} else {
 			p.reset();
+			return false;
 		}
 		p.pop();
-		return p;
+		return true;
 	}
 
-	parser& template_parser::try_render_expression() {
+	bool template_parser::try_render_expression() {
 		p.push();
 		if(p.try_token_ws("gt")) {
 			std::cout << "render: gt\n";
@@ -191,29 +502,70 @@ namespace cppcms { namespace templates {
 			std::cout << "render: form\n";
 		} else if(p.reset().try_token_ws("csrf")) {
 			std::cout << "render: csrf\n";
-		} else
+		} else {
 			p.reset();
+			return false;
+		}
 		p.pop();
-		return p;
+		return true;
 	}
 
-	parser& template_parser::try_variable_expression() {
+	bool template_parser::try_variable_expression() {
 		p.push();
 		if(p.skip_to("%>")) { // [ variable xpr, %> ]
 			const std::string expr = p.get<std::string>(-2); 
 			std::cout << "variable: " << expr << std::endl;
-		} else
+		} else {
 			p.reset();
+			return false;
+		}
 		p.pop();
-		return p;
+		return true;
 	}
 
 	void template_parser::add_html(const std::string& html) {
-		std::cout << "html: " << html << std::endl;
+		std::cout << "html: " << compress_html(html) << std::endl;
 	}
 
 	void template_parser::add_cpp(const std::string& cpp) {
 		std::cout << "cpp: " << cpp << std::endl;
+	}
+
+	namespace ast {
+		base_t::base_t(const std::string& sysname, base_ref parent)
+			: sysname_(sysname)
+	       		, parent_(parent) {}
+		
+		base_ref base_t::parent() { return parent_; }
+
+		root_t::root_t() : base_t("root", *this) {}
+
+		void root_t::write(std::ostream& o) {
+			for(const skins_t::value_type& skin : skins) {
+				for(const view_set_t::value_type& view : skin.second) {
+					view.second->write(o);
+				}
+			}	       
+		}
+
+		void view_t::write(std::ostream& /* o */) {
+		}
+
+		void template_t::write(std::ostream& /* o */) {
+		}
+
+		view_t::view_t(const std::string& name, root_ref parent)
+			: base_t("view", parent)
+			, name(name) {}
+			
+		template_t::template_t(const std::string& name, view_ref parent) 
+			: base_t("template", parent)
+	       		, name_(name) {}
+
+		void template_t::add(base_ptr what) {
+			children.emplace_back(what);
+		}
+
 	}
 }}
 
