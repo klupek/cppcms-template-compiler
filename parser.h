@@ -148,6 +148,15 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 		};
 
+		class include_t : public base_t {
+			const std::string name_, from_, using_, with_;
+			const std::vector<std::string> arguments_;
+		public:
+			include_t(const std::string& name, const std::string& from, const std::string& _using, const std::string& with, const std::vector<std::string>& arguments, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
 
 
 	}

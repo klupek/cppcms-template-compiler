@@ -7,7 +7,7 @@ namespace cppcms { namespace templates {
 	static bool is_digit(char c) {
 		return ( c >= '0' && c <= '9' );
 	}
-		
+	/*	
 	static std::string decode_escaped_string(const std::string& input) {
 		std::string result;
 		bool escaped = false;
@@ -85,6 +85,7 @@ namespace cppcms { namespace templates {
 			result += '\\';
 		return result;
 	}
+*/
 	
 	static std::string compress_html(const std::string& input) {
 		std::string result(input.length()*2, 0);
@@ -179,9 +180,9 @@ namespace cppcms { namespace templates {
 					index_ = start;
 					raise("expected \", found EOF instead");
 				} else {
-					stack_.emplace_back(state_t { start, decode_escaped_string(std::string(&input_[start+1], &input_[index_])) });
+					stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_+1]) }); // FIXME: decode?
 #ifdef PARSER_DEBUG
-				std::cout << ">>> string " << stack_.back().token << std::endl;
+					std::cout << ">>> string " << stack_.back().token << std::endl;
 #endif
 					index_++; // move to next character, past '"'
 				}
@@ -353,8 +354,11 @@ namespace cppcms { namespace templates {
 					while(!closed) {
 						skipws(false);
 						if(try_variable()) {
+							details_.emplace(detail_t { "argument_variable", get(-1) });
 						} else if(back(1).try_string()) {
+							details_.emplace(detail_t { "argument_string", get(-1) });
 						} else if(back(1).try_number()) {
+							details_.emplace(detail_t { "argument_number", get(-1) });
 						} else {
 							raise("expected ')', string, number or variable");
 						}
@@ -979,25 +983,26 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "render: url " << url << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("include").try_identifier()) { // [ include, \s+, identifier, \s+ ]
-			const std::string id = p.get(-2);
-			std::cout << "render: include " << id << std::endl;
+		} else if(p.reset().try_token_ws("include").try_identifier()) { // [ include, \s+, identifier ]
+			const std::string id = p.get(-1);
+			std::string from, _using, with;
 			p.skipws(false);
 			p.try_argument_list(); // [ argument_list ], cant fail
+			std::vector<std::string> arguments;
+			while(!p.details().empty()) {
+				arguments.insert(arguments.begin(), p.details().top().item);
+				p.details().pop();
+			}
+
 			const std::string alist = p.get(-1);
-			std::cout << "\tparameters " << alist << std::endl;
 			if(p.skipws(true).try_token_ws("from").try_identifier_ws()) { // [ \s+, from, \s+, ID, \s+ ]	
-				const std::string from = p.get(-2);
-				std::cout << "\tfrom " << from << std::endl;
+				from = p.get(-2);
 			} else if(p.back(4).try_token_ws("using").try_identifier_ws()) { // [ \s+, using, \s+, ID, \s+ ]
-				const std::string _using = p.get(-2);
-				std::cout << "\tusing " << _using << std::endl;
+				_using = p.get(-2);
 				if(p.try_token_ws("with").try_variable_ws()) { // [ with, \s+, VAR, \s+ ]
-					const std::string variable = p.get(-2);
-					std::cout << "\twith " << variable << std::endl;
+					with = p.get(-2);
 				} else {
 					p.back(4);
-					std::cout << "\twith (default)"  << std::endl;
 				} 
 			} else {
 				p.back(5);
@@ -1005,6 +1010,20 @@ namespace cppcms { namespace templates {
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
+			current_ = current_->as<ast::has_children>().add<ast::include_t>(id, from, _using, with, arguments);
+#ifdef PARSER_TRACE
+			std::cout << "render: include " << id;
+			if(!from.empty())
+				std::cout << " from " << from;
+			if(!_using.empty())
+				std::cout << " using " << _using;
+			if(!with.empty()) 
+				std::cout << " with " << with;
+			else
+				std::cout << " with (default)";
+			std::cout << std::endl;
+			std::cout << "\tparameters " << alist << std::endl;
+#endif
 		} else if(p.reset().try_token_ws("using").try_identifier_ws()) { // 'using' IDENTIFIER  [ 'with' VARIABLE ] as IDENTIFIER  
 			const std::string id = p.get(-2);
 			std::cout << "render: using " << id << std::endl;
@@ -1298,6 +1317,49 @@ namespace cppcms { namespace templates {
 
 		void ngt_t::write(std::ostream& /* o */) {
 		}
+			
+		include_t::include_t(	const std::string& name, const std::string& from, 
+					const std::string& _using, const std::string& with, 
+					const std::vector<std::string>& arguments, base_ptr parent) 
+			: base_t("include", false, parent) 
+			, name_(name)
+			, from_(from)
+			, using_(_using) 
+			, with_(with)
+			, arguments_(arguments) {}
+		
+		void include_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "include " << name_;
+
+			if(from_.empty()) {
+				if(!using_.empty()) {
+					o << " using " << using_;
+					if(!with_.empty())
+						o << " with " << with_;
+					else
+						o << " with (this content)";
+				} else {
+					o << " from (self)";
+				}
+			} else {
+				o << " from " << from_;
+			}
+			o << std::endl;
+			if(arguments_.empty()) {
+				o << p << "\twithout arguments\n";
+			} else {
+				o << p << "\twith arguments (";
+				for(const std::string& arg : arguments_)
+					o << arg << ", ";
+				o << ")\n";
+			}
+		}
+
+		void include_t::write(std::ostream& /* o */) {
+		}
+
+
 
 	}
 }}
