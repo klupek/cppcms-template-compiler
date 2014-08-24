@@ -144,7 +144,7 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && index_ < input_.length()) {
 			size_t start = index_;
-			if(is_latin_letter(input_[index_])) {
+			if(is_latin_letter(input_[index_]) || input_[index_] == '_') {
 				index_++;
 				for(;index_ < input_.length() && ( is_latin_letter(input_[index_]) || is_digit(input_[index_]) || input_[index_] == '_'); ++index_);
 				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_]) });
@@ -204,6 +204,8 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && index_ < input_.length()) {
 			size_t start = index_;
+			if(input_[index_] == '-' || input_[index_] == '+')
+				index_++;
 			if(input_[index_] >= '0' && input_[index_] <= '9') {
 				bool dot = false;
 				for(; (input_[index_] >= '0' && input_[index_] <= '9') || (!dot && input_[index_] == '.'); ++index_) {
@@ -337,6 +339,42 @@ namespace cppcms { namespace templates {
 		}
 		return *this;
 	}
+	parser& parser::try_argument_list() {
+		if(!failed_ && index_ < input_.length()) {			
+			size_t start = index_, end = index_;
+			auto stack_copy = stack_;
+			if(try_token("(")) {
+				if(!skipws(false).try_token(")")) {
+					back(2);
+					bool closed = false;
+					while(!closed) {
+						skipws(false);
+						if(try_variable()) {
+						} else if(back(1).try_string()) {
+						} else if(back(1).try_number()) {
+						} else {
+							raise("expected ')', string, number or variable");
+						}
+
+						if(try_token(")")) {
+							break;
+						} else if(!back(1).skipws(false).try_token(",")) {
+							raise("expected ','");
+						}
+					}
+				}
+			} else {
+				back(1);
+			}
+			end = index_;
+			std::swap(stack_, stack_copy);
+			stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+		} else {
+			failed_++;
+		}
+		return *this;
+
+	}
 	// [ 'ext' ] NAME [ '(' ( VARIABLE | STRING | NUMBER ) [ ',' ( VARIABLE | STRING | NUMBER ) ] ... ]
 	parser& parser::try_filter() {
 #ifdef PARSER_DEBUG
@@ -349,26 +387,8 @@ namespace cppcms { namespace templates {
 				back(2);
 			}
 			if(try_name()) {
-				if(try_token("(")) {
-					bool closed = false;
-					while(!closed) {
-						skipws(false);
-						if(try_variable()) {
-						} else if(back(1).try_string()) {
-						} else if(back(1).try_number()) {
-						} else {
-							raise("expected ')', string, number or variable");
-						}
-						
-						if(try_token(")")) {
-							break;
-						} else if(!back(1).skipws(false).try_token(",")) {
-							raise("expected ','");
-						}
-					}
-				} else {
-					back(1);
-				}
+				try_argument_list();
+				stack_.pop_back();
 				stack_.emplace_back(state_t { start, std::string(&input_[start],&input_[index_]) });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> filter " << stack_.back().token << std::endl;
@@ -730,8 +750,51 @@ namespace cppcms { namespace templates {
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
-		} else if(p.reset().try_token_ws("include")) {
-			std::cout << "render: include\n";
+		} else if(p.reset().try_token_ws("include").try_identifier()) { // [ include, \s+, identifier, \s+ ]
+			const std::string id = p.get(-2);
+			std::cout << "render: include " << id << std::endl;
+			p.skipws(false);
+			p.try_argument_list(); // [ argument_list ], cant fail
+			const std::string alist = p.get(-1);
+			std::cout << "\tparameters " << alist << std::endl;
+			if(p.skipws(true).try_token_ws("from").try_identifier_ws()) { // [ \s+, from, \s+, ID, \s+ ]	
+				const std::string from = p.get(-2);
+				std::cout << "\tfrom " << from << std::endl;
+			} else if(p.back(4).try_token_ws("using").try_identifier_ws()) { // [ \s+, using, \s+, ID, \s+ ]
+				const std::string _using = p.get(-2);
+				std::cout << "\tusing " << _using << std::endl;
+				if(p.try_token_ws("with").try_variable_ws()) { // [ with, \s+, VAR, \s+ ]
+					const std::string variable = p.get(-2);
+					std::cout << "\twith " << variable << std::endl;
+				} else {
+					p.back(4);
+					std::cout << "\twith (default)"  << std::endl;
+				} 
+			} else {
+				p.back(5);
+			}
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %> after gt expression");
+			}
+		} else if(p.reset().try_token_ws("using").try_identifier_ws()) { // 'using' IDENTIFIER  [ 'with' VARIABLE ] as IDENTIFIER  
+			const std::string id = p.get(-2);
+			std::cout << "render: using " << id << std::endl;
+			if(p.try_token_ws("with").try_variable_ws()) {
+				const std::string variable = p.get(-2);
+				std::cout << "\twith " << variable << std::endl;
+			} else {
+				p.back(4);
+				std::cout << "\twith (default)" << std::endl;
+			}
+			if(p.try_token_ws("as").try_identifier_ws()) {
+				const std::string as = p.get(-2);
+				std::cout << "\tas " << as << std::endl;
+			} else {
+				p.back(4).raise("expected 'as' IDENTIFIER");
+			}
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %> after gt expression");
+			}
 		} else if(p.reset().try_token_ws("form")) {
 			std::cout << "render: form\n";
 		} else if(p.reset().try_token_ws("csrf")) {

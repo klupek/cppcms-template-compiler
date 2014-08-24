@@ -4,6 +4,10 @@
 <blah><blah>11</blah></blah>
 <%= foobar %>
 <% gt "you have no messages" %>
+<% include title() %>
+<% include parent::foo() %>
+<% include bar(x,"test",-1.0) from foo %>
+<% include bar(x,"test",-1.0) using baz %>
 <% end template %>
 <% template vn1_tmpl2() %>
 <foo><bar>12</bar></foo>
@@ -23,6 +27,16 @@
 blah blah 21
 <%= *foo.bar->baz() | filter1 %>
 <% gt "click <a href=\"{1}\">here</a> to read {2} unread messages" using messages.link | urlencode, messages.count() %>
+<% using foo with some_content as bar %>
+  <% include baz() from bar %>
+  <% include beep(10) from bar %>
+<% end using %>
+next
+<% include baz() using foo with some_content %>
+next2
+<% using foo with some_content as _some_variable %>  
+   <% include baz() from _some_variable %>  
+<% end using %> 
 <% end template %>
 <% template vn2_tmpl2() %>
 blah blah 22

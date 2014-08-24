@@ -101,7 +101,7 @@ namespace cppcms { namespace templates {
 		parser& try_complex_variable_ws(); // -> [ CVAR, \s+ ]
 		parser& try_filter(); // -> [ FILTER ]
 		parser& try_comma(); // [ ',' ]
-
+		parser& try_argument_list(); // [ argument_list ]
 		parser& try_identifier(); // -> [ ID ]
 		parser& try_identifier_ws(); // -> [ ID, \s+ ]
 		parser& skip_to(const std::string& token); // -> [ prefix, token ]
