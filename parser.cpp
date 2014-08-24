@@ -969,12 +969,16 @@ namespace cppcms { namespace templates {
 #endif
 		} else if(p.reset().try_token_ws("url").try_string_ws()) { // [ url, \s+, STRING, \s+ ]
 			const std::string url = p.get(-2);
-			std::cout << "render: url " << url << std::endl;
 			std::vector<std::string> variables;
-			parse_using_options(variables);
+			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
+
+			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>("url", url, options);			
+#ifdef PARSER_TRACE
+			std::cout << "render: url " << url << std::endl;
+#endif
 		} else if(p.reset().try_token_ws("include").try_identifier()) { // [ include, \s+, identifier, \s+ ]
 			const std::string id = p.get(-2);
 			std::cout << "render: include " << id << std::endl;
