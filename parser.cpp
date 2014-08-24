@@ -1050,7 +1050,13 @@ namespace cppcms { namespace templates {
 	}
 
 	void template_parser::add_cpp(const std::string& cpp) {
+		if(current_->is_a<ast::root_t>())
+			current_->as<ast::root_t>().add_cpp(cpp);
+		else
+			current_->as<ast::template_t>().add<ast::cppcode_t>(cpp);
+#ifdef PARSER_TRACE
 		std::cout << "cpp: " << cpp << std::endl;
+#endif
 	}
 
 	namespace ast {
@@ -1070,6 +1076,10 @@ namespace cppcms { namespace templates {
 
 		void root_t::add_skin(const std::string& name) {
 			current_skin = skins.emplace( name, view_set_t() ).first;
+		}
+
+		void root_t::add_cpp(const std::string& code) {
+			codes.emplace_back(code);
 		}
 			
 		base_ptr root_t::add_view(const std::string& name, const std::string& data, const std::string& parent) {
@@ -1091,15 +1101,18 @@ namespace cppcms { namespace templates {
 			
 		void root_t::dump(std::ostream& o, int tabs) {
 			std::string p(tabs, '\t');
-			o << p << "root [\n";
+			o << p << "root with " << codes.size() << " codes [\n";
 			for(const skins_t::value_type& skin : skins) {
 				o << p << "\tskin " << skin.first << " with " << skin.second.size() << " views [\n";
 				for(const view_set_t::value_type& view : skin.second) {
 					view.second->dump(o, tabs+2);
 				}
-				o << "\t]\n\n";
+				o << p << "\t]\n";
 			}
-			o << "]\n";
+			o << p << "]; codes = [\n";
+			for(const std::string& code : codes)
+				o << p << "\t" << code << std::endl;
+			o << p << "];\n";
 		}
 
 		void view_t::write(std::ostream& /* o */) {
@@ -1137,13 +1150,22 @@ namespace cppcms { namespace templates {
 		void template_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
 			o << p << "template " << name_ << " with arguments " << arguments_ << " and " << children.size() << " children [\n";
-			
+			for(const base_ptr& child : children)
+				child->dump(o, tabs+1);
 			o << p << "]\n";
 		}
-		void template_t::add(base_ptr what) {
-			children.emplace_back(what);
+		
+		cppcode_t::cppcode_t(const std::string& code, base_ptr parent)
+			: base_t("c++", parent)
+			, code_(code) {}
+
+		void cppcode_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "c++: " << code_ << std::endl;
 		}
 
+		void cppcode_t::write(std::ostream& /* o */) {
+		}
 	}
 }}
 

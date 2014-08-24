@@ -32,10 +32,10 @@ namespace cppcms { namespace templates {
 		protected:
 			base_t(const std::string& sysname, base_ptr parent);
 
-			template<typename T>
-			bool is_a() const { return dynamic_cast<T*>(this) != nullptr; }
-
 		public:
+			template<typename T>
+			bool is_a() const { return dynamic_cast<const T*>(this) != nullptr; }
+
 			// TODO: verbose errors instead of bad_cast
 			template<typename T>
 			T& as() { return dynamic_cast<T&>(*this); }
@@ -47,6 +47,7 @@ namespace cppcms { namespace templates {
 		};
 
 		class root_t : public base_t {
+			std::vector<std::string> codes;
 			typedef std::map< std::string, view_ptr > view_set_t;
 			typedef std::map< std::string, view_set_t > skins_t;
 			skins_t skins;
@@ -54,15 +55,17 @@ namespace cppcms { namespace templates {
 		public:
 			root_t();
 			void add_skin(const std::string& name);
+			void add_cpp(const std::string& code);
 			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			// TODO: add .clear() method, circular dependencies in shared pointers
 		};	
 		
 		class view_t : public base_t {
 			typedef std::map<std::string, template_ptr> templates_t;
 			templates_t templates;
-			std::string name_, data_, master_;
+			const std::string name_, data_, master_;
 		public:
 			base_ptr add_template(const std::string& name, const std::string& arguments);
 			virtual void dump(std::ostream& o, int tabs = 0);
@@ -72,13 +75,24 @@ namespace cppcms { namespace templates {
 
 		class template_t : public base_t {
 			std::vector<base_ptr> children;
-			std::string name_, arguments_;
+			const std::string name_, arguments_;
 		public:
 			template_t(const std::string& name, const std::string& arguments, base_ptr parent);
-			void add(base_ptr what);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
-		};	
+			
+			template<typename T, typename... Args>
+			void add(Args&&... args) { children.emplace_back(std::make_shared<T>(std::forward<Args>(args)..., shared_from_this())); }
+		};
+
+		class cppcode_t : public base_t {
+			const std::string code_;	
+		public:
+			cppcode_t(const std::string& code_, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
 	}
 
 	class parser {
