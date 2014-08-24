@@ -64,6 +64,7 @@ namespace cppcms { namespace templates {
 			templates_t templates;
 			std::string name_, data_, master_;
 		public:
+			base_ptr add_template(const std::string& name, const std::string& arguments);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent);
 			virtual void write(std::ostream& o);
@@ -71,10 +72,11 @@ namespace cppcms { namespace templates {
 
 		class template_t : public base_t {
 			std::vector<base_ptr> children;
-			std::string name_;
+			std::string name_, arguments_;
 		public:
-			template_t(const std::string& name, base_ptr parent);
+			template_t(const std::string& name, const std::string& arguments, base_ptr parent);
 			void add(base_ptr what);
+			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};	
 	}

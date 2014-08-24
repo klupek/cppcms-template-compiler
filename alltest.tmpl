@@ -12,7 +12,7 @@
 <% render skin_name, "sidebar" with sidebar_data %>
 <% xhtml %>
 <% end template %>
-<% template vn1_tmpl2() %>
+<% template vn1_tmpl2(int x,int y, double z) %>
 <foo><bar>12</bar></foo>
 <%= *foo.bar->baz() %>
 <% gt "you have {1} unread message" using messages.count() %>
@@ -23,7 +23,7 @@
 <% csrf script %>
 <% html %>
 <% end template %>
-<% template vn1_tmpl3() %>
+<% template vn1_tmpl3(data::list_t const &list) %>
 <% if not empty username %>  
   <h1>Hello <% username %></h1>  
 <% else %>  
