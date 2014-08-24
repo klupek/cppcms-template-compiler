@@ -173,6 +173,8 @@ namespace cppcms { namespace templates {
  * 			pgt "You have one {1:apple}" using apple_count
  * 			needs creating dictionary, maybe cppcms::template_parser::pluralizer, or in config?
  * 			note: config should contain word => [ [ range, pluralized ] ], so not only english is supported
+ * 	form	
+ * 		additional form rendering engines should be registerable, 'form' NAME VARIABLE 
  */
 
 #endif

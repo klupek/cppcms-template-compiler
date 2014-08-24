@@ -37,6 +37,11 @@ next2
 <% using foo with some_content as _some_variable %>  
    <% include baz() from _some_variable %>  
 <% end using %> 
+<% form as_table form.fields %>  
+<% form as_space form.submit_buttons %>
+<% form input some_button %>  
+<% form begin some_button %>
+<% form block some_button %> 
 <% end template %>
 <% template vn2_tmpl2() %>
 blah blah 22

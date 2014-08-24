@@ -795,8 +795,9 @@ namespace cppcms { namespace templates {
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
-		} else if(p.reset().try_token_ws("form")) {
-			std::cout << "render: form\n";
+		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]
+			const std::string name = p.get(-5), var = p.get(-3);
+			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 		} else if(p.reset().try_token_ws("csrf")) {
 			std::cout << "render: csrf\n";
 		} else {
