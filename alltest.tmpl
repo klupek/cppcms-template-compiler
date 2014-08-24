@@ -10,6 +10,7 @@
 <% include bar(x,"test",-1.0) using baz %>
 <% render "sidebar" with sidebar_data %>  
 <% render skin_name, "sidebar" with sidebar_data %>
+<% xhtml %>
 <% end template %>
 <% template vn1_tmpl2() %>
 <foo><bar>12</bar></foo>
@@ -20,6 +21,7 @@
 <% url "/blog/post" using post_id %>
 <% url "/blog/post" using post_id , slug | ext filter_for_url %>
 <% csrf script %>
+<% html %>
 <% end template %>
 <% end view %>
 <% end skin %>

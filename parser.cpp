@@ -696,6 +696,9 @@ namespace cppcms { namespace templates {
 			std::cout << "global: template " << function_name << "\n";
 		} else if(p.reset().try_token_ws("c++").skip_to("%>")) { // [ c++, \s+, cppcode, %> ] = 4
 			add_cpp(p.get(-2));
+		} else if(p.reset().try_token_ws("html").try_token("%>") || p.back(3).try_token_ws("xhtml").try_token("%>")) { // [ html|xhtml, \s+, %> ]
+			const std::string mode = p.get(-3);
+			std::cout << "global: mode " << mode << std::endl;
 		} else {
 			p.reset();
 			return false;
