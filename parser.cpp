@@ -906,7 +906,7 @@ namespace cppcms { namespace templates {
 		return true;
 	}
 		
-	ast::fmt_function_t::using_options_t template_parser::parse_using_options(std::vector<std::string>& variables) {
+	ast::using_options_t template_parser::parse_using_options(std::vector<std::string>& variables) {
 		if(p.try_token_ws("using")) {
 			while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
 				variables.emplace_back(p.get(-1));
@@ -920,22 +920,22 @@ namespace cppcms { namespace templates {
 				p.back(2).raise("expected complex variable");
 			}
 			
-			ast::fmt_function_t::using_options_t options;
+			ast::using_options_t options;
 			std::vector<std::string> filters;
 			while(!p.details().empty()) {
 				const auto& op = p.details().top();
 				if(op.what == "complex_variable_name") {
-					options.emplace_back(ast::fmt_function_t::using_option_t { op.item, std::vector<std::string>(filters.rbegin(), filters.rend()) });
+					options.emplace_back(ast::using_option_t { op.item, std::vector<std::string>(filters.rbegin(), filters.rend()) });
 					filters.clear();
 				} else { // what == complex_variable
 					filters.emplace_back(op.item);
 				}
 				p.details().pop();
 			}
-			return ast::fmt_function_t::using_options_t(options.rbegin(), options.rend());
+			return ast::using_options_t(options.rbegin(), options.rend());
 		} else {
 			p.back(2);
-			return ast::fmt_function_t::using_options_t();
+			return ast::using_options_t();
 		}
 	}
 
@@ -958,11 +958,15 @@ namespace cppcms { namespace templates {
 			const std::string plural = p.get(-4);
 			const std::string variable = p.get(-2);
 			std::vector<std::string> variables;
-			std::cout << "render: ngt " << singular << "/" << plural << "/" << variable << std::endl;
-			parse_using_options(variables);
+			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
+
+			current_ = current_->as<ast::has_children>().add<ast::ngt_t>(singular, plural, variable, options);
+#ifdef PARSER_TRACE
+			std::cout << "render: ngt " << singular << "/" << plural << "/" << variable << std::endl;
+#endif
 		} else if(p.reset().try_token_ws("url").try_string_ws()) { // [ url, \s+, STRING, \s+ ]
 			const std::string url = p.get(-2);
 			std::cout << "render: url " << url << std::endl;
@@ -1255,6 +1259,40 @@ namespace cppcms { namespace templates {
 		}
 
 		void fmt_function_t::write(std::ostream& /* o */) {
+		}
+		
+		ngt_t::ngt_t( 	const std::string& singular, 
+				const std::string& plural,
+				const std::string& variable,
+				const using_options_t& uos, 
+				base_ptr parent)
+			: base_t("ngt", false, parent)
+			, singular_(singular)
+			, plural_(plural)
+			, variable_(variable) 
+			, using_options_(uos) {}
+		
+		void ngt_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "fmt function ngt: " << singular_ << "/" << plural_ << " with variable " << variable_ <<  std::endl;
+			if(using_options_.empty()) {
+				o << p << "\twithout using\n";
+			} else {
+				o << p << "\twith using options:\n"; 
+				for(const using_option_t& uo : using_options_) {
+					o << p << "\t\t" << uo.variable;
+					if(!uo.filters.empty()) {
+						o << " with filters ";
+						for(const std::string& filter : uo.filters)  {
+							o << " | " << filter;
+						}
+					}
+					o << std::endl;
+				}
+			}
+		}
+
+		void ngt_t::write(std::ostream& /* o */) {
 		}
 
 	}

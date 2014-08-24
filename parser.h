@@ -122,22 +122,33 @@ namespace cppcms { namespace templates {
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};
+			
+		struct using_option_t {
+			const std::string variable;
+			const std::vector<std::string> filters;
+		};
+		typedef std::vector<using_option_t> using_options_t;
 
 		class fmt_function_t : public base_t {
-		public:
-			struct using_option_t {
-				const std::string variable;
-				const std::vector<std::string> filters;
-			};
-			typedef std::vector<using_option_t> using_options_t;
-		private:
+		protected:
 			const std::string name_, fmt_;
-			using_options_t using_options_;
+			const using_options_t using_options_;
 		public:
 			fmt_function_t(const std::string& name, const std::string& fmt, const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};
+
+		class ngt_t : public base_t {
+			const std::string singular_, plural_, variable_;
+			const using_options_t using_options_;
+		public:
+			ngt_t(const std::string& singular, const std::string& plural, const std::string& variable, const using_options_t& uos, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
+
 
 	}
 
@@ -224,7 +235,7 @@ namespace cppcms { namespace templates {
 		ast::root_ptr tree_;
 		ast::base_ptr current_;
 
-		ast::fmt_function_t::using_options_t parse_using_options(std::vector<std::string>&);
+		ast::using_options_t parse_using_options(std::vector<std::string>&);
 	public:
 		template_parser(const std::string& input);
 
