@@ -1045,7 +1045,10 @@ namespace cppcms { namespace templates {
 			}
 		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]
 			const std::string name = p.get(-5), var = p.get(-3);
+			current_ = current_->as<ast::has_children>().add<ast::form_t>(name, var);
+#ifdef PARSER_TRACE
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
+#endif
 		} else if(p.reset().try_token_ws("csrf")) {
 			if(p.try_name_ws().try_token("%>")) { // [ csrf, \s+, NAME, \s+, %> ]
 				const std::string type = p.get(-3);
@@ -1359,7 +1362,18 @@ namespace cppcms { namespace templates {
 		void include_t::write(std::ostream& /* o */) {
 		}
 
-
+		form_t::form_t(const std::string& style, const std::string& name, base_ptr parent)
+			: base_t("form", false, parent)
+			, style_(style)
+			, name_(name) {}
+		
+		void form_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "form style = " << style_ << " using variable " << name_ << std::endl;
+		}
+		
+		void form_t::write(std::ostream& /* o */) {
+		}
 
 	}
 }}

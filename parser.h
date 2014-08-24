@@ -157,6 +157,15 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 		};
 
+		class form_t : public base_t {
+			const std::string style_, name_;
+		public:
+			form_t(const std::string& style, const std::string& name, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
+
 
 
 	}
