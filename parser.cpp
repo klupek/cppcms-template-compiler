@@ -799,7 +799,12 @@ namespace cppcms { namespace templates {
 			const std::string name = p.get(-5), var = p.get(-3);
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 		} else if(p.reset().try_token_ws("csrf")) {
-			std::cout << "render: csrf\n";
+			if(p.try_name_ws().try_token("%>")) { // [ csrf, \s+, NAME, \s+, %> ]
+				const std::string type = p.get(-3);
+				std::cout << "render: csrf " << type << "\n";
+			} else if(p.back(3).try_token("%>")) {
+				std::cout << "render: csrf (default)\n";
+			}
 		} else {
 			p.reset();
 			return false;

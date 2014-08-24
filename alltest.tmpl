@@ -17,6 +17,7 @@
 <% url "../summary"  %>
 <% url "/blog/post" using post_id %>
 <% url "/blog/post" using post_id , slug | ext filter_for_url %>
+<% csrf script %>
 <% end template %>
 <% end view %>
 <% end skin %>
@@ -42,6 +43,7 @@ next2
 <% form input some_button %>  
 <% form begin some_button %>
 <% form block some_button %> 
+<% csrf %>
 <% end template %>
 <% template vn2_tmpl2() %>
 blah blah 22
