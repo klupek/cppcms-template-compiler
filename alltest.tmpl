@@ -33,7 +33,36 @@
   <% n %> is odd.  
 <% elif ( content.n % 3 ==0) %>  
   <% n %> can be divided by 3 without reminder.  
+<% end %> 
+<% foreach student in students %>  
+  <ul>  
+  <% item %>  
+     <li><% student.id %>, <% student.name %></li>  
+  <% end %>  
+  </ul>  
+<% empty %>  
+  <h2>No students</h2>  
+<% end %> 
+
+<% foreach student in students %>  
+<% separator %>, <% item %><% student.name %><% end %>  
 <% end %>  
+
+<% foreach line rowid num from 1 in code %>  
+<% item %><%= num %>:<%=line%><% end %>  
+<% end %>  
+
+<% foreach student as students_type::iterator in students %>  
+<% end %>
+
+<% foreach w in form %>  
+  <% separator %><br/><% item %>  
+    <% if w.has_message() %><% w.message() %>:<% end %>  
+    <% form input w %>  
+    <% if not w.valid() %>:<% w.error_message() %><% end %>  
+  <% end %>  
+<% end %> 
+
 <% end template %>
 <% end view %>
 <% end skin %>

@@ -629,6 +629,9 @@ namespace cppcms { namespace templates {
 		while(!p.finished() && !p.failed()) {
 			p.push();
 			if(p.reset().skip_to("<%")) { // [ <html><blah>..., <% ] = 2
+#ifdef PARSER_DEBUG
+				std::cout << ">>> main -> <%\n";
+#endif
 				if(!last_item_was_code || !is_spaces(p.get(-2))) {
 					size_t pos = p.get(-2).find("%>");
 					if(pos != std::string::npos) {
@@ -638,7 +641,10 @@ namespace cppcms { namespace templates {
 				}
 
 				p.push();
-				if(p.try_token_ws("=")) { // [ <html><blah>..., <%, = ] = 3
+				if(p.try_token("=").skipws(false)) { // [ <html><blah>..., <%, =, \s*] = 3
+#ifdef PARSER_DEBUG
+					std::cout << ">>>\t <%=\n";
+#endif
 					if(!try_variable_expression()) {
 						p.raise("expected variable expression");
 					}
@@ -655,6 +661,9 @@ namespace cppcms { namespace templates {
 			} else if(p.reset().skip_to("%>")) {
 				p.reset().raise("found unexpected %>");
 			} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
+#ifdef PARSER_DEBUG
+				std::cout << ">>> main -> skip to end\n";
+#endif
 				add_html(p.get(-1));
 				last_item_was_code = false;
 			} else {
@@ -692,13 +701,48 @@ namespace cppcms { namespace templates {
 			}
 		} else if(p.reset().try_token_ws("else").try_token_ws("%>")) {
 			std::cout << "flow: else\n";
-		} else if(p.reset().try_token_ws("foreach")) {
-			std::cout << "flow: foreach\n";
-		} else if(p.reset().try_token_ws("item")) {
+		// 'foreach' NAME ['as' IDENTIFIER ] [ 'rowid' IDENTIFIER [ 'from' NUMBER ] ] [ 'reverse' ] 'in' VARIABLE
+		} else if(p.reset().try_token_ws("foreach").try_name_ws()) {
+			const std::string item_name = p.get(-2);
+			std::string as("(default)"), rowid("(none)"), variable;
+			bool reverse = false;
+			int from = 0;
+
+			if(p.try_token_ws("as").try_identifier_ws()) {
+				as = p.get(-2);
+			} else {
+				p.back(4);
+			}
+			if(p.try_token_ws("rowid").try_name_ws()) { // docs say IDENTIFIER, but local variable should be NAME
+				rowid = p.get(-2);
+			} else {
+				p.back(4);
+			}
+
+			if(p.try_token_ws("from").try_number_ws()) {
+				from = p.get<int>(-2);
+			} else {
+				p.back(4);
+			}
+
+			if(p.try_token_ws("reverse")) {
+				reverse = true;
+			} else {
+				p.back(2);
+			}
+
+			if(p.try_token_ws("in").try_variable_ws().try_token("%>")) {
+				variable = p.get(-3);
+			} else {
+				p.raise("expected in VARIABLE %>");
+			}
+
+			std::cout << "flow: foreach (" << item_name << " in " << variable << "; rowid " << rowid << ", reverse " << reverse << ", as " << as << ", from " << from << "\n";
+		} else if(p.reset().try_token_ws("item").try_token("%>")) {
 			std::cout << "flow: item\n";
-		} else if(p.reset().try_token_ws("empty")) {
+		} else if(p.reset().try_token_ws("empty").try_token("%>")) {
 			std::cout << "flow: empty\n";
-		} else if(p.reset().try_token_ws("separator")) {
+		} else if(p.reset().try_token_ws("separator").try_token("%>")) {
 			std::cout << "flow: separator\n";
 		} else if(p.reset().try_token_ws("end")) {
 			if(p.try_name_ws()) {
