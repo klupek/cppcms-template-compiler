@@ -282,15 +282,18 @@ namespace cppcms { namespace templates {
 			push();
 			size_t start = index_, end = index_;
 			if(try_variable()) {
+				const std::string var = get(-1);
 				end = index_;
 				while(skipws(false).try_token("|").skipws(false).try_filter()) { 
 					end = index_;
+					details_.emplace(detail_t { "complex_variable", get(-1) });
 				}
 				
 				back(4);
 				pop();
 				
 				stack_.emplace_back(state_t {start, std::string(&input_[start], &input_[end]) });				
+				details_.emplace(detail_t { "complex_variable_name", var });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> complex " << stack_.back().token << std::endl;
 #endif
@@ -576,6 +579,8 @@ namespace cppcms { namespace templates {
 		return ( stack_.empty() || stack_.back().index == index_ ) && index_ == input_.length(); 
 	}
 
+	parser::details_t& parser::details() { return details_; }
+	
 	parser& parser::back(size_t n) {
 		if(n > failed_ + stack_.size())
 			throw std::logic_error("Attempt to clear more tokens then stack_.size()+failed_");
@@ -1034,9 +1039,18 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_variable_expression() {
 		p.push();
-		if(p.skip_to("%>")) { // [ variable xpr, %> ]
-			const std::string expr = p.get<std::string>(-2); 
+		if(p.try_complex_variable().skipws(false).try_token("%>")) { // [ variable expression, \s*, %> ]
+			const std::string expr = p.details().top().item;
+			std::vector<std::string> filters;
+			p.details().pop();
+			while(!p.details().empty() && p.details().top().what == "complex_variable") {
+				filters.emplace_back(p.details().top().item);
+				p.details().pop();
+			}
+			current_ = current_->as<ast::has_children>().add<ast::variable_t>(expr, filters);
+#ifdef PARSER_TRACE
 			std::cout << "variable: " << expr << std::endl;
+#endif
 		} else {
 			p.reset();
 			return false;
@@ -1051,18 +1065,19 @@ namespace cppcms { namespace templates {
 
 	void template_parser::add_cpp(const std::string& cpp) {
 		if(current_->is_a<ast::root_t>())
-			current_->as<ast::root_t>().add_cpp(cpp);
+			current_ = current_->as<ast::root_t>().add_cpp(cpp);
 		else
-			current_->as<ast::template_t>().add<ast::cppcode_t>(cpp);
+			current_ = current_->as<ast::has_children>().add<ast::cppcode_t>(cpp);
 #ifdef PARSER_TRACE
 		std::cout << "cpp: " << cpp << std::endl;
 #endif
 	}
 
 	namespace ast {
-		base_t::base_t(const std::string& sysname, base_ptr parent)
+		base_t::base_t(const std::string& sysname, bool block, base_ptr parent)
 			: sysname_(sysname)
-	       		, parent_(parent) {}
+	       		, parent_(parent) 
+			, block_(block) {}
 		
 		base_ptr base_t::parent() { return parent_; }
 		
@@ -1070,16 +1085,19 @@ namespace cppcms { namespace templates {
 			return sysname_;
 		}
 
+		bool base_t::block() const { return block_; }
+
 		root_t::root_t() 
-			: base_t("root", nullptr)		
+			: base_t("root", true, nullptr)		
  			, current_skin(skins.end()) {}
 
 		void root_t::add_skin(const std::string& name) {
 			current_skin = skins.emplace( name, view_set_t() ).first;
 		}
 
-		void root_t::add_cpp(const std::string& code) {
+		base_ptr root_t::add_cpp(const std::string& code) {
 			codes.emplace_back(code);
+			return shared_from_this();
 		}
 			
 		base_ptr root_t::add_view(const std::string& name, const std::string& data, const std::string& parent) {
@@ -1127,7 +1145,7 @@ namespace cppcms { namespace templates {
 			).first->second;
 		}
 		view_t::view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent)
-			: base_t("view", parent)
+			: base_t("view", true, parent)
 			, name_(name)
 			, data_(data)
 			, master_(master) {}
@@ -1143,7 +1161,7 @@ namespace cppcms { namespace templates {
 		}
 			
 		template_t::template_t(const std::string& name, const std::string& arguments, base_ptr parent) 
-			: base_t("template", parent)
+			: has_children("template", true, parent)
 	       		, name_(name) 
 			, arguments_(arguments) {}
 
@@ -1156,7 +1174,7 @@ namespace cppcms { namespace templates {
 		}
 		
 		cppcode_t::cppcode_t(const std::string& code, base_ptr parent)
-			: base_t("c++", parent)
+			: base_t("c++", false, parent)
 			, code_(code) {}
 
 		void cppcode_t::dump(std::ostream& o, int tabs) {
@@ -1165,6 +1183,27 @@ namespace cppcms { namespace templates {
 		}
 
 		void cppcode_t::write(std::ostream& /* o */) {
+		}
+		
+		variable_t::variable_t(const std::string& name, const std::vector<std::string>& filters, base_ptr parent)
+			: base_t("variable", false, parent)
+			, name_(name)
+			, filters_(filters) {}
+
+		void variable_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "variable: " << name_;
+			if(filters_.empty())
+				o << " without filters\n";
+			else {
+				o << " with filters: "; 
+				for(const std::string& filter : filters_) 
+					o << " | " << filter;
+				o << std::endl;
+			}
+		}
+
+		void variable_t::write(std::ostream& /* o */) {
 		}
 	}
 }}

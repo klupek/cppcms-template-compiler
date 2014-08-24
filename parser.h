@@ -29,8 +29,9 @@ namespace cppcms { namespace templates {
 		class base_t : public std::enable_shared_from_this<base_t> {
 			std::string sysname_;
 			base_ptr parent_;
+			bool block_;
 		protected:
-			base_t(const std::string& sysname, base_ptr parent);
+			base_t(const std::string& sysname, bool block, base_ptr parent);
 
 		public:
 			template<typename T>
@@ -44,6 +45,7 @@ namespace cppcms { namespace templates {
 			virtual void dump(std::ostream& o, int tabs = 0) = 0;
 			base_ptr parent();
 			const std::string& sysname() const;
+			bool block() const;
 		};
 
 		class root_t : public base_t {
@@ -55,7 +57,7 @@ namespace cppcms { namespace templates {
 		public:
 			root_t();
 			void add_skin(const std::string& name);
-			void add_cpp(const std::string& code);
+			base_ptr add_cpp(const std::string& code);
 			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
@@ -72,23 +74,51 @@ namespace cppcms { namespace templates {
 			view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent);
 			virtual void write(std::ostream& o);
 		};
-
-		class template_t : public base_t {
+		
+		class has_children : public base_t {
+		protected:
 			std::vector<base_ptr> children;
+		public:
+			using base_t::base_t; 
+
+			template<typename T, typename... Args>
+			base_ptr add(Args&&... args) { 
+				children.emplace_back(
+					std::make_shared<T>(
+						std::forward<Args>(args)..., 
+						shared_from_this()
+					)
+				); 
+				if(children.back()->block())
+					return children.back();
+				else
+					return shared_from_this();
+			}
+		};
+
+		class template_t : public has_children {
 			const std::string name_, arguments_;
 		public:
 			template_t(const std::string& name, const std::string& arguments, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			
-			template<typename T, typename... Args>
-			void add(Args&&... args) { children.emplace_back(std::make_shared<T>(std::forward<Args>(args)..., shared_from_this())); }
 		};
+
 
 		class cppcode_t : public base_t {
 			const std::string code_;	
 		public:
 			cppcode_t(const std::string& code_, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
+		class variable_t : public base_t {
+			const std::string name_;
+			const std::vector<std::string> filters_;
+		public:
+			variable_t(const std::string& name, const std::vector<std::string>& filters, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};
@@ -104,6 +134,14 @@ namespace cppcms { namespace templates {
 
 		std::vector<state_t> stack_;
 		std::stack<std::pair<size_t,size_t>> state_stack_;
+		// details stack looks like stack or state_stack_, but refactoring it currently would break too many things
+		struct detail_t {
+			const std::string what, item;
+		};
+		
+		typedef std::stack<detail_t> details_t;
+		details_t details_;
+
 		size_t index_;
 		size_t failed_;
 	public:
@@ -141,6 +179,8 @@ namespace cppcms { namespace templates {
 		operator bool() const;
 		parser& back(size_t n);
 		void raise(const std::string& msg);
+
+		details_t& details();
 
 		// state
 		void push();
