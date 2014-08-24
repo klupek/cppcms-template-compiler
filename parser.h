@@ -35,10 +35,13 @@ namespace cppcms { namespace templates {
 			template<typename T>
 			bool is_a() const { return dynamic_cast<T*>(this) != nullptr; }
 
+		public:
+			// TODO: verbose errors instead of bad_cast
 			template<typename T>
 			T& as() { return dynamic_cast<T&>(*this); }
-		public:
+
 			virtual void write(std::ostream&) = 0;
+			virtual void dump(std::ostream& o, int tabs = 0) = 0;
 			base_ref parent();
 		};
 
@@ -48,6 +51,8 @@ namespace cppcms { namespace templates {
 			skins_t skins;
 		public:
 			root_t();
+			void add_skin(const std::string& name);
+			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};	
 		
@@ -141,20 +146,25 @@ namespace cppcms { namespace templates {
 	class template_parser {
 		parser p;
 		ast::root_ptr tree_;
+		ast::base_ptr current_;
 
 		void parse_using_options(std::vector<std::string>&);
 	public:
 		template_parser(const std::string& input);
+
+		void parse();
+
+		ast::root_ptr tree();
+	private:
 		bool try_flow_expression();
 		bool try_global_expression();
 		bool try_render_expression();
 		bool try_variable_expression();
-
-		void parse();
-
+		
 		// actions
 		void add_html(const std::string&);
 		void add_cpp(const std::string&);
+
 	};
 
 }}

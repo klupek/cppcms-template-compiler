@@ -616,8 +616,13 @@ namespace cppcms { namespace templates {
 
 	template_parser::template_parser(const std::string& input)
 		: p(input) 
-		, tree_(std::make_shared<ast::root_t>()) {}
+		, tree_(std::make_shared<ast::root_t>()) 
+		, current_(tree_) {}
 		
+
+	ast::root_ptr template_parser::tree() {
+		return tree_;
+	}
 
 	void template_parser::parse() {
 		bool last_item_was_code = true;
@@ -819,14 +824,17 @@ namespace cppcms { namespace templates {
 		if(p.try_token_ws("skin")) { //  [ skin, \s+ ] 
 			std::string skin_name;
 			p.push();
-			if(p.try_token_nl("%>")) { // [ skin, \s+, %> ]
+			if(p.try_token("%>")) { // [ skin, \s+, %> ]
 				skin_name = "__default__";
-			} else if(p.reset().try_name_ws().try_token_nl("%>")) { // [ skin, \s+, skinname, \s+, %> ]
+			} else if(p.reset().try_name_ws().try_token("%>")) { // [ skin, \s+, skinname, \s+, %> ]
 				skin_name = p.get(-3);
 			} else {
 				p.reset().raise("expected %> or skin name");
 			}
 			p.pop();
+			
+			// save to tree
+			current_->as<ast::root_t>().add_skin(skin_name);
 			std::cout << "global: skin " << skin_name << "\n";
 		} else if(p.reset().try_token_ws("view")) { // [ view ]
 			p.push();
@@ -1027,12 +1035,31 @@ namespace cppcms { namespace templates {
 
 		root_t::root_t() : base_t("root", *this) {}
 
+		void root_t::add_skin(const std::string& name) {
+			skins.emplace( name, view_set_t() );
+		}
+
 		void root_t::write(std::ostream& o) {
 			for(const skins_t::value_type& skin : skins) {
 				for(const view_set_t::value_type& view : skin.second) {
 					view.second->write(o);
 				}
 			}	       
+		}
+			
+		void root_t::dump(std::ostream& o, int tabs) {
+			std::string p(tabs, '\t');
+			o << p << "root [\n";
+			for(const skins_t::value_type& skin : skins) {
+				o << p << "\tskin " << skin.first << " with " << skin.second.size() << " views [\n";
+				for(const view_set_t::value_type& view : skin.second) {
+					o << p << "\t\tview " << view.first << " {\n";
+					view.second->dump(o, tabs+1);
+					o << "\t\t}\n";
+				}
+				o << "\t]\n\n";
+			}
+			o << "]\n";
 		}
 
 		void view_t::write(std::ostream& /* o */) {
@@ -1065,5 +1092,6 @@ int main(int /*argc*/, char **argv) {
 	const std::string input(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
 	cppcms::templates::template_parser p(input);
 	p.parse();
+	p.tree()->dump(std::cout);
 	return 0;
 }
