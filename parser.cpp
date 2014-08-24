@@ -805,6 +805,28 @@ namespace cppcms { namespace templates {
 			} else if(p.back(3).try_token("%>")) {
 				std::cout << "render: csrf (default)\n";
 			}
+		// 'render' [ ( VARIABLE | STRING ) , ] ( VARIABLE | STRING ) [ 'with' VARIABLE ] 
+		} else if(p.reset().try_token_ws("render")) {
+			if(p.try_variable() || p.back(1).try_string()) {
+				std::string arg1 = p.get(-1), arg2;
+				if(p.try_comma().try_variable_ws() || p.back(2).try_string_ws()) {
+					arg2 = p.get(-2);
+				} else {
+					p.back(3).skipws(false);
+				}
+				std::cout << "render: render\n\tskin = " << (arg2.empty() ? "(default)" : arg1 ) << "\n\tview = " << (arg2.empty() ? arg1 : arg2) << std::endl;
+				if(p.try_token_ws("with").try_variable_ws()) {
+					const std::string with = p.get(-2);
+					std::cout << "\twith " << with << std::endl;
+				} else {
+					p.back(4);
+				}
+				if(!p.try_token("%>")) {
+					p.raise("expected %>");
+				}
+			} else {
+				p.raise("expected STRING or VARIABLE");
+			}
 		} else {
 			p.reset();
 			return false;
