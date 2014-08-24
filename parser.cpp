@@ -755,8 +755,56 @@ namespace cppcms { namespace templates {
 			if(!p.try_token("%>")) {
 				p.raise("expected %> after end [whatever]");
 			}
+		// 'cache' ( VARIABLE | STRING ) [ 'for' NUMBER ] ['on' 'miss' VARIABLE() ] [ 'no' 'triggers' ] [ 'no' 'recording' ]
 		} else if(p.reset().try_token_ws("cache")) {
-			std::cout << "flow: cache\n";
+			std::string name, miss;
+			int _for = -1;
+			bool no_triggers = false, no_recording = false;
+			if(p.try_variable_ws() || p.back(2).try_string_ws()) {
+				name = p.get(-2);
+			} else {
+				p.raise("expected VARIABLE or STRING");
+			}
+
+			if(p.try_token_ws("for").try_number_ws()) {
+				_for = p.get<int>(-2);
+			} else {
+				p.back(4);
+			}
+
+			if(p.try_token_ws("on").try_token_ws("miss").try_variable()) { // TODO: () is required at the end of expression, but try_variable already consumes it
+				miss = p.get(-1);
+			} else {
+				p.back(5);
+			}
+
+			if(p.try_token_ws("no").try_token_ws("triggers")) {
+				no_triggers = true;
+			} else {
+				p.back(4);
+			}
+
+			if(p.try_token_ws("no").try_token_ws("recording")) {
+				no_recording = true;
+			} else {
+				p.back(4);
+			}
+			
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %>");
+			}
+
+			std::cout << "flow: cache " << name << ", miss = " << miss << ", for " << _for << ", no_triggers = " << no_triggers << ", no_recording = " << no_recording << "\n";
+		} else if(p.reset().try_token_ws("trigger")) {
+			if(!p.try_variable() && !p.back(1).try_string()) {
+				p.raise("expected STRING or VARIABLE");
+			} else {
+				const std::string name = p.get(-1);
+				std::cout << "flow: trigger " << name << std::endl;
+			}
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %>");
+			}
 		} else {
 			p.reset();
 			return false;

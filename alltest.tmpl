@@ -89,6 +89,19 @@ next2
 <% form begin some_button %>
 <% form block some_button %> 
 <% csrf %>
+<% cache "foo" %>  
+    <% cache "ba\"r\"r" %>  
+ <% trigger varname %> 
+    <% end %>  
+<% end %>  
+<% cache "foo" %>  
+    <% cache "bar" no triggers %>  
+    <% end %>  
+<% end %>  
+<% cache "foo" on miss load_data() %>  
+ <% trigger "bar" %> 
+...  
+<% end %>
 <% end template %>
 <% template vn2_tmpl2() %>
 blah blah 22
