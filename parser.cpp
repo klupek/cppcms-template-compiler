@@ -906,7 +906,7 @@ namespace cppcms { namespace templates {
 		return true;
 	}
 		
-	void template_parser::parse_using_options(std::vector<std::string>& variables) {
+	ast::fmt_function_t::using_options_t template_parser::parse_using_options(std::vector<std::string>& variables) {
 		if(p.try_token_ws("using")) {
 			while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
 				variables.emplace_back(p.get(-1));
@@ -919,8 +919,23 @@ namespace cppcms { namespace templates {
 			if(!p) { // found ',', but next complex variable was not found
 				p.back(2).raise("expected complex variable");
 			}
+			
+			ast::fmt_function_t::using_options_t options;
+			std::vector<std::string> filters;
+			while(!p.details().empty()) {
+				const auto& op = p.details().top();
+				if(op.what == "complex_variable_name") {
+					options.emplace_back(ast::fmt_function_t::using_option_t { op.item, std::vector<std::string>(filters.rbegin(), filters.rend()) });
+					filters.clear();
+				} else { // what == complex_variable
+					filters.emplace_back(op.item);
+				}
+				p.details().pop();
+			}
+			return ast::fmt_function_t::using_options_t(options.rbegin(), options.rend());
 		} else {
 			p.back(2);
+			return ast::fmt_function_t::using_options_t();
 		}
 	}
 
@@ -928,12 +943,16 @@ namespace cppcms { namespace templates {
 		p.push();
 		if(p.try_token_ws("gt").try_string_ws() || p.back(4).try_token_ws("pgt").try_string_ws()) { // [ gt|pgt, \s+, string, \s+ ]
 			const std::string fmt = p.get(-2);
-			std::cout << "render: gt " << fmt << "\n";
 			std::vector<std::string> variables;
-			parse_using_options(variables);
+			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
+
+			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>("gt", fmt, options);
+#ifdef PARSER_TRACE
+			std::cout << "render: gt " << fmt << "\n";
+#endif
 		} else if(p.reset().try_token_ws("ngt").try_string().try_comma().try_string().try_comma().try_variable_ws()) { // [ ngt, \s+, STRING, ',', STRING, ',', VARIABLE, \s+ ]
 			const std::string singular = p.get(-6);
 			const std::string plural = p.get(-4);
@@ -1205,6 +1224,39 @@ namespace cppcms { namespace templates {
 
 		void variable_t::write(std::ostream& /* o */) {
 		}
+			
+		fmt_function_t::fmt_function_t(	const std::string& name, 
+						const std::string& fmt, 
+						const using_options_t& uos, 
+						base_ptr parent) 
+			: base_t(name, false, parent)
+			, name_(name)
+			, fmt_(fmt)
+			, using_options_(uos) {}
+		
+		void fmt_function_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "fmt function " << name_ << ": " << fmt_ << std::endl;
+			if(using_options_.empty()) {
+				o << p << "\twithout using\n";
+			} else {
+				o << p << "\twith using options:\n"; 
+				for(const using_option_t& uo : using_options_) {
+					o << p << "\t\t" << uo.variable;
+					if(!uo.filters.empty()) {
+						o << " with filters ";
+						for(const std::string& filter : uo.filters)  {
+							o << " | " << filter;
+						}
+					}
+					o << std::endl;
+				}
+			}
+		}
+
+		void fmt_function_t::write(std::ostream& /* o */) {
+		}
+
 	}
 }}
 
