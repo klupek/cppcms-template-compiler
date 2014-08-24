@@ -23,6 +23,18 @@
 <% csrf script %>
 <% html %>
 <% end template %>
+<% template vn1_tmpl3() %>
+<% if not empty username %>  
+  <h1>Hello <% username %></h1>  
+<% else %>  
+  <h1>Hello Visitor</h1>  
+<% end %>  
+<% if ( content.n % 2==0 ) %>  
+  <% n %> is odd.  
+<% elif ( content.n % 3 ==0) %>  
+  <% n %> can be divided by 3 without reminder.  
+<% end %>  
+<% end template %>
 <% end view %>
 <% end skin %>
 

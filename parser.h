@@ -107,6 +107,7 @@ namespace cppcms { namespace templates {
 		parser& skip_to(const std::string& token); // -> [ prefix, token ]
 		parser& skipws(bool require); // -> [ \s* ]
 		parser& skip_to_end(); // -> [ ... ]
+		parser& try_parenthesis_expression(); // [ ... ]
 		
 		template<typename T=std::string>
 		T get(int n);

@@ -510,6 +510,51 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
+	parser& parser::try_parenthesis_expression() {
+#ifdef PARSER_DEBUG
+		std::cout << ">>>(" << failed_ << ") find parenthesis expression at '" << input_.substr(index_, 20) << "'\n";
+#endif
+		if(!failed_ && index_ < input_.length() && input_[index_] == '(') {
+			size_t start = index_;
+			int bracket_count = 1;
+			bool escaped = false, string = false, string2 = false;
+			++index_;
+			for(; index_ < input_.length() && bracket_count > 0; ++index_) {
+				const char c = input_[index_];
+				if(!string && !string2 && c == '(')
+					bracket_count++;
+				else if(!string && !string2 && c == ')')
+					bracket_count--;
+				else if( (string || string2) && escaped && c == '\\')
+					escaped = false;
+				else if( (string || string2) && !escaped && c == '\\')
+					escaped = true;
+				else if(!string && !string2 && c == '"') 
+					string = true;
+				else if(string && !escaped && c == '"')
+					string = false;
+				else if(!string && !string2 && c == '\'')
+					string2 = true;
+				else if(string2 && !escaped && c == '\'')
+					string2 = false;
+				else 
+					escaped = false;
+#ifdef PARSER_VERY_DEBUG
+				std::cout << ">>>> at " << index_ << "=" << c << ": escaped=" << escaped  << ", string = " << string << ", string2 = " << string2 << ", brackets = " << bracket_count << std::endl;
+#endif
+
+			}
+			if(bracket_count == 0) {
+				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_]) });
+			} else {
+				index_ = start;
+				failed_++;
+			}
+		} else {
+			failed_ ++;
+		} 
+		return *this;
+	}
 
 
 	void parser::raise(const std::string& msg) {
@@ -599,8 +644,11 @@ namespace cppcms { namespace templates {
 					}
 				} else if(p.reset().skipws(true)) { // [ <html><blah>..., <%, \s+ ] = 3
 					if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
-						p.raise("expected c++, global, render or flow expression");
-					}
+						// compat
+						if(!try_variable_expression()) {
+							p.raise("expected c++, global, render or flow expression or (deprecated) variable expression");
+						}
+					} 
 				}
 				p.pop();
 				last_item_was_code  = true;
@@ -618,12 +666,31 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_flow_expression() {
 		p.push();
-
-		if(p.try_token_ws("if")) {
-			std::cout << "flow: if\n";
-		} else if(p.reset().try_token_ws("elif")) {
-			std::cout << "flow: elif\n";
-		} else if(p.reset().try_token_ws("else")) {
+		// ( 'if' | 'elif' ) [ 'not' ] [ 'empty' ] ( VARIABLE | 'rtl' )  
+		if(p.try_token_ws("if") || p.back(2).try_token_ws("elif")) {
+			const std::string verb = p.get(-2);
+			bool negate = false;
+			if(p.try_token_ws("not")) {
+				negate = true;
+			} else {
+				p.back(2);
+			}
+			if(p.try_token_ws("empty").try_variable_ws()) { // [ empty, \s+, VARIABLE, \s+ ]				
+				const std::string var = p.get(-2);
+				std::cout << "flow: " << verb << " " << (negate ? "not " : "") << "empty: " << var << std::endl;
+			} else if(p.back(4).try_variable_ws()) { // [ VAR, \s+ ]
+				const std::string var = p.get(-2);
+				std::cout << "flow: " << verb << " " << (negate ? "not " : "") << ":" << var << std::endl;
+			} else if(p.back(2).try_token("(") && p.back(1).try_parenthesis_expression().skipws(false)) { // [ (, \s*, expr, \s* ]
+				const std::string expr = p.get(-2);
+				std::cout << "flow: " << verb << " c++ expr: " << expr << std::endl;
+			} else {
+				p.raise("expected [not] [empty] ([variable]|rtl) or ( c++ expr )");
+			}
+			if(!p.skipws(false).try_token("%>")) {
+				p.raise("expected %>");
+			}
+		} else if(p.reset().try_token_ws("else").try_token_ws("%>")) {
 			std::cout << "flow: else\n";
 		} else if(p.reset().try_token_ws("foreach")) {
 			std::cout << "flow: foreach\n";
