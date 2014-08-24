@@ -28,9 +28,9 @@ namespace cppcms { namespace templates {
 
 		class base_t : public std::enable_shared_from_this<base_t> {
 			std::string sysname_;
-			base_ref parent_;
+			base_ptr parent_;
 		protected:
-			base_t(const std::string& sysname, base_ref parent);
+			base_t(const std::string& sysname, base_ptr parent);
 
 			template<typename T>
 			bool is_a() const { return dynamic_cast<T*>(this) != nullptr; }
@@ -42,16 +42,19 @@ namespace cppcms { namespace templates {
 
 			virtual void write(std::ostream&) = 0;
 			virtual void dump(std::ostream& o, int tabs = 0) = 0;
-			base_ref parent();
+			base_ptr parent();
+			const std::string& sysname() const;
 		};
 
 		class root_t : public base_t {
 			typedef std::map< std::string, view_ptr > view_set_t;
 			typedef std::map< std::string, view_set_t > skins_t;
 			skins_t skins;
+			skins_t::iterator current_skin;
 		public:
 			root_t();
 			void add_skin(const std::string& name);
+			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};	
@@ -59,9 +62,10 @@ namespace cppcms { namespace templates {
 		class view_t : public base_t {
 			typedef std::map<std::string, template_ptr> templates_t;
 			templates_t templates;
-			std::string name;
+			std::string name_, data_, master_;
 		public:
-			view_t(const std::string& name, root_ref parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent);
 			virtual void write(std::ostream& o);
 		};
 
@@ -69,7 +73,7 @@ namespace cppcms { namespace templates {
 			std::vector<base_ptr> children;
 			std::string name_;
 		public:
-			template_t(const std::string& name, view_ref parent);
+			template_t(const std::string& name, base_ptr parent);
 			void add(base_ptr what);
 			virtual void write(std::ostream& o);
 		};	
