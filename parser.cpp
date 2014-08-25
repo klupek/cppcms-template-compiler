@@ -1050,12 +1050,17 @@ namespace cppcms { namespace templates {
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 #endif
 		} else if(p.reset().try_token_ws("csrf")) {
+			std::string type;
 			if(p.try_name_ws().try_token("%>")) { // [ csrf, \s+, NAME, \s+, %> ]
-				const std::string type = p.get(-3);
-				std::cout << "render: csrf " << type << "\n";
-			} else if(p.back(3).try_token("%>")) {
-				std::cout << "render: csrf (default)\n";
+				type = p.get(-3);
+			} else if(!p.back(3).try_token("%>")) {
+				p.raise("expected csrf style(type) or %>");
 			}
+			// save to tree
+			current_ = current_->as<ast::has_children>().add<ast::csrf_t>(type);
+#ifdef PARSER_TRACE
+			std::cout << "render: csrf " << ( type.empty() ? "(default)" : type ) << "\n";
+#endif
 		// 'render' [ ( VARIABLE | STRING ) , ] ( VARIABLE | STRING ) [ 'with' VARIABLE ] 
 		} else if(p.reset().try_token_ws("render")) {
 			if(p.try_variable() || p.back(1).try_string()) {
@@ -1373,6 +1378,18 @@ namespace cppcms { namespace templates {
 		}
 		
 		void form_t::write(std::ostream& /* o */) {
+		}
+		
+		csrf_t::csrf_t(const std::string& style, base_ptr parent)
+			: base_t("form", false, parent)
+			, style_(style) {}
+		
+		void csrf_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "csrf style = " << (style_.empty() ? "(default)" : style_ ) << std::endl;
+		}
+		
+		void csrf_t::write(std::ostream& /* o */) {
 		}
 
 	}

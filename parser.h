@@ -164,6 +164,14 @@ namespace cppcms { namespace templates {
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 		};
+		
+		class csrf_t : public base_t {
+			const std::string style_;
+		public:
+			csrf_t(const std::string& style, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
 
 
 
