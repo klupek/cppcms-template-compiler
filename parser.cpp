@@ -860,7 +860,7 @@ namespace cppcms { namespace templates {
 			p.pop();
 			
 			// save to tree			
-			current_->as<ast::root_t>().add_skin(skin_name);
+			current_ = current_->as<ast::root_t>().add_skin(skin_name);
 #ifdef PARSER_TRACE
 			std::cout << "global: skin " << skin_name << "\n";
 #endif
@@ -901,7 +901,11 @@ namespace cppcms { namespace templates {
 			add_cpp(p.get(-2));
 		} else if(p.reset().try_token_ws("html").try_token("%>") || p.back(3).try_token_ws("xhtml").try_token("%>")) { // [ html|xhtml, \s+, %> ]
 			const std::string mode = p.get(-3);
+
+			current_ = current_->as<ast::root_t>().set_mode(mode);
+#ifdef PARSER_TRACE
 			std::cout << "global: mode " << mode << std::endl;
+#endif
 		} else {
 			p.reset();
 			return false;
@@ -1156,8 +1160,14 @@ namespace cppcms { namespace templates {
 			: base_t("root", true, nullptr)		
  			, current_skin(skins.end()) {}
 
-		void root_t::add_skin(const std::string& name) {
+		base_ptr root_t::add_skin(const std::string& name) {
 			current_skin = skins.emplace( name, view_set_t() ).first;
+			return shared_from_this();
+		}
+
+		base_ptr root_t::set_mode(const std::string& mode) {
+			mode_ = mode;
+			return shared_from_this();
 		}
 
 		base_ptr root_t::add_cpp(const std::string& code) {
@@ -1184,7 +1194,7 @@ namespace cppcms { namespace templates {
 			
 		void root_t::dump(std::ostream& o, int tabs) {
 			std::string p(tabs, '\t');
-			o << p << "root with " << codes.size() << " codes [\n";
+			o << p << "root with " << codes.size() << " codes, mode = " << (mode_.empty() ? "(default)" : mode_) << " [\n";
 			for(const skins_t::value_type& skin : skins) {
 				o << p << "\tskin " << skin.first << " with " << skin.second.size() << " views [\n";
 				for(const view_set_t::value_type& view : skin.second) {

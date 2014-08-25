@@ -54,9 +54,11 @@ namespace cppcms { namespace templates {
 			typedef std::map< std::string, view_set_t > skins_t;
 			skins_t skins;
 			skins_t::iterator current_skin;
+			std::string mode_;
 		public:
 			root_t();
-			void add_skin(const std::string& name);
+			base_ptr add_skin(const std::string& name);
+			base_ptr set_mode(const std::string& mode);
 			base_ptr add_cpp(const std::string& code);
 			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
