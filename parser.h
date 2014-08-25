@@ -191,6 +191,32 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 		};
 
+		class if_t : public has_children {
+		public:	
+			enum type_t { if_regular, if_empty, if_rtl, if_cpp, if_else };
+		private:
+			class condition_t : public has_children {
+				const type_t type_;
+				const std::string cond_, variable_;
+				const bool negate_;
+			public:
+				condition_t(type_t type, const std::string& cond, const std::string& variable, bool negate, base_ptr parent);
+				virtual void dump(std::ostream& o, int tabs = 0);
+				virtual void write(std::ostream& o);
+			};
+			typedef std::shared_ptr<condition_t> condition_ptr;
+			std::vector< condition_ptr > conditions_;
+		public:
+			if_t(base_ptr parent);
+			
+			base_ptr add_condition(type_t type, bool negate);
+			base_ptr add_condition(const type_t& type, const std::string& variable, bool negate);
+			base_ptr add_condition(const std::string& cond, bool negate);
+			
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
 
 
 

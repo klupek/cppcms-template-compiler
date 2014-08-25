@@ -640,50 +640,58 @@ namespace cppcms { namespace templates {
 				return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 			});
 		};
-		while(!p.finished() && !p.failed()) {
-			p.push();
-			if(p.reset().skip_to("<%")) { // [ <html><blah>..., <% ] = 2
-#ifdef PARSER_DEBUG
-				std::cout << ">>> main -> <%\n";
-#endif
-				if(!last_item_was_code || !is_spaces(p.get(-2))) {
-					size_t pos = p.get(-2).find("%>");
-					if(pos != std::string::npos) {
-						p.back(2).skip_to("%>").back(1).raise("unexpected %>");
-					}
-					add_html(p.get(-2));
-				}
-
+		try {
+			while(!p.finished() && !p.failed()) {
 				p.push();
-				if(p.try_token("=").skipws(false)) { // [ <html><blah>..., <%, =, \s*] = 3
+				if(p.reset().skip_to("<%")) { // [ <html><blah>..., <% ] = 2
 #ifdef PARSER_DEBUG
-					std::cout << ">>>\t <%=\n";
+					std::cout << ">>> main -> <%\n";
 #endif
-					if(!try_variable_expression()) {
-						p.raise("expected variable expression");
-					}
-				} else if(p.reset().skipws(true)) { // [ <html><blah>..., <%, \s+ ] = 3
-					if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
-						// compat
-						if(!try_variable_expression()) {
-							p.raise("expected c++, global, render or flow expression or (deprecated) variable expression");
+					if(!last_item_was_code || !is_spaces(p.get(-2))) {
+						size_t pos = p.get(-2).find("%>");
+						if(pos != std::string::npos) {
+							p.back(2).skip_to("%>").back(1).raise("unexpected %>");
 						}
-					} 
+						add_html(p.get(-2));
+					}
+
+					p.push();
+					if(p.try_token("=").skipws(false)) { // [ <html><blah>..., <%, =, \s*] = 3
+#ifdef PARSER_DEBUG
+						std::cout << ">>>\t <%=\n";
+#endif
+						if(!try_variable_expression()) {
+							p.raise("expected variable expression");
+						}
+					} else if(p.reset().skipws(true)) { // [ <html><blah>..., <%, \s+ ] = 3
+						if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
+							// compat
+							if(!try_variable_expression()) {
+								p.raise("expected c++, global, render or flow expression or (deprecated) variable expression");
+							}
+						} 
+					}
+					p.pop();
+					last_item_was_code  = true;
+				} else if(p.reset().skip_to("%>")) {
+					p.reset().raise("found unexpected %>");
+				} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
+#ifdef PARSER_DEBUG
+					std::cout << ">>> main -> skip to end\n";
+#endif
+					add_html(p.get(-1));
+					last_item_was_code = false;
+				} else {
+					p.reset().raise("expected <%=, <% or EOF");
 				}
 				p.pop();
-				last_item_was_code  = true;
-			} else if(p.reset().skip_to("%>")) {
-				p.reset().raise("found unexpected %>");
-			} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
-#ifdef PARSER_DEBUG
-				std::cout << ">>> main -> skip to end\n";
-#endif
-				add_html(p.get(-1));
-				last_item_was_code = false;
-			} else {
-				p.reset().raise("expected <%=, <% or EOF");
 			}
-			p.pop();
+		} catch(const std::bad_cast&) {
+			std::string current_path = current_->sysname();
+			for(auto i = current_->parent(); i && i != i->parent(); i = i->parent())
+				current_path += " / " + i->sysname();
+			p.raise("invalid sequence: " + current_path);			
+			// FIXME: more verbose
 		}
 	}
 
@@ -692,6 +700,8 @@ namespace cppcms { namespace templates {
 		// ( 'if' | 'elif' ) [ 'not' ] [ 'empty' ] ( VARIABLE | 'rtl' )  
 		if(p.try_token_ws("if") || p.back(2).try_token_ws("elif")) {
 			const std::string verb = p.get(-2);
+			std::string cond, variable;
+			ast::if_t::type_t type = ast::if_t::if_regular;
 			bool negate = false;
 			if(p.try_token_ws("not")) {
 				negate = true;
@@ -699,22 +709,51 @@ namespace cppcms { namespace templates {
 				p.back(2);
 			}
 			if(p.try_token_ws("empty").try_variable_ws()) { // [ empty, \s+, VARIABLE, \s+ ]				
-				const std::string var = p.get(-2);
-				std::cout << "flow: " << verb << " " << (negate ? "not " : "") << "empty: " << var << std::endl;
+				variable = p.get(-2);
+				type = ast::if_t::type_t::if_empty;
 			} else if(p.back(4).try_variable_ws()) { // [ VAR, \s+ ]
-				const std::string var = p.get(-2);
-				std::cout << "flow: " << verb << " " << (negate ? "not " : "") << ":" << var << std::endl;
+				variable = p.get(-2);
+				type = ast::if_t::type_t::if_regular;
 			} else if(p.back(2).try_token("(") && p.back(1).try_parenthesis_expression().skipws(false)) { // [ (, \s*, expr, \s* ]
-				const std::string expr = p.get(-2);
-				std::cout << "flow: " << verb << " c++ expr: " << expr << std::endl;
+				cond = p.get(-2);
+				type = ast::if_t::if_cpp;
 			} else {
 				p.raise("expected [not] [empty] ([variable]|rtl) or ( c++ expr )");
 			}
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %>");
 			}
+
+#ifdef PARSER_TRACE
+			std::cout << "flow: " << verb << " type " << type << ", cond = " << cond << ", variable = " << variable << std::endl;
+#endif
+			if(verb == "if") {
+				current_ = current_->as<ast::has_children>().add<ast::if_t>();
+			} else if(verb == "elif") {
+				if(current_->sysname() == "condition") {
+					current_ = current_->parent();
+				} else {
+					p.raise("unexpected elif found");
+				}
+			}
+				
+			if(type == ast::if_t::type_t::if_cpp) {
+				current_ = current_->as<ast::if_t>().add_condition(cond, negate);				
+			} else if(type == ast::if_t::type_t::if_regular && variable == "rtl") {
+				current_ = current_->as<ast::if_t>().add_condition(ast::if_t::type_t::if_rtl, negate);
+			} else {
+				current_ = current_->as<ast::if_t>().add_condition(type, variable, negate);
+			}
 		} else if(p.reset().try_token_ws("else").try_token_ws("%>")) {
+			if(current_->sysname() == "condition") {
+				current_ = current_->parent();
+			} else {
+				p.raise("unexpected else found");
+			}
+			current_ = current_->as<ast::if_t>().add_condition(ast::if_t::type_t::if_else, false);
+#ifdef PARSER_TRACE
 			std::cout << "flow: else\n";
+#endif
 		// 'foreach' NAME ['as' IDENTIFIER ] [ 'rowid' IDENTIFIER [ 'from' NUMBER ] ] [ 'reverse' ] 'in' VARIABLE
 		} else if(p.reset().try_token_ws("foreach").try_name_ws()) {
 			const std::string item_name = p.get(-2);
@@ -771,8 +810,13 @@ namespace cppcms { namespace templates {
 			
 			// action
 			if(what.empty() || current_->sysname() == what) { // FIXME: what.empty() for debugging only
-				if(!what.empty() && current_->parent()) {
+				if(!what.empty() && current_->parent()) {				
 					current_ = current_->parent();
+					if(current_->sysname() == "if") { // prev line backs from "condition" to "if"
+						current_ = current_->parent();  // so i need to back from "if" to its parent
+					}
+				} else if(what.empty() && current_->sysname() == "condition") { // FIXME: temporary only
+					current_ = current_->parent()->parent();
 				} else {
 					// as below
 					// p.back(3).raise("unexpected end");
@@ -1444,6 +1488,80 @@ namespace cppcms { namespace templates {
 		
 		void using_t::write(std::ostream& /* o */) {
 		}
+				
+		
+		if_t::condition_t::condition_t(type_t type, const std::string& cond, const std::string& variable, bool negate, base_ptr parent)
+			: has_children("condition", true, parent)
+			, type_(type)
+			, cond_(cond)
+			, variable_(variable) 
+			, negate_(negate) {}
+			
+		if_t::if_t(base_ptr parent)
+			: has_children("if", true, parent) {}
+
+		base_ptr if_t::add_condition(type_t type, bool negate) {
+			conditions_.emplace_back(
+				std::make_shared<condition_t>(type, std::string(), std::string(), negate, shared_from_this())
+			);
+			return conditions_.back();
+		}
+			
+		base_ptr if_t::add_condition(const type_t& type, const std::string& variable, bool negate) {
+			conditions_.emplace_back(
+				std::make_shared<condition_t>(type, std::string(), variable, negate, shared_from_this())
+			);
+			return conditions_.back();
+		}
+			
+		base_ptr if_t::add_condition(const std::string& cond, bool negate) {
+			conditions_.emplace_back(
+				std::make_shared<condition_t>(type_t::if_cpp, cond, std::string(), negate, shared_from_this())
+			);
+			return conditions_.back();
+		}
+		
+		void if_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "if with " << conditions_.size() << " branches [\n";
+			for(const condition_ptr& c : conditions_)
+				c->dump(o, tabs+1);
+			o << p << "]\n";
+		}
+		
+		void if_t::write(std::ostream& /* o */) {
+		}
+		
+		void if_t::condition_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			const std::string neg = (negate_ ? "not " : "");
+			switch(type_) {
+				case if_regular:
+					o << p << "if " << neg << "true: " << variable_;
+					break;
+				case if_empty:
+					o << p << "if " << neg << "empty: " << variable_;
+					break;
+				case if_rtl:
+					o << p << "if " << neg << "rtl";
+					break;
+				case if_cpp:
+					o << p << "if " << neg << "cpp: " << cond_;
+					break;
+				case if_else:
+					o << p << "if else: " << variable_;
+					break;
+			}
+			o << " [\n";
+			for(const base_ptr& bp : children) {
+				bp->dump(o, tabs+1);
+			}
+			o << p << "]\n";
+		}
+		
+		void if_t::condition_t::write(std::ostream& /* o */) {
+		}
+
 			
 
 	}
