@@ -181,6 +181,15 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 		};
 
+		class using_t : public has_children {
+			const std::string id_, with_, as_;
+		public:
+			using_t(const std::string& id, const std::string& with, const std::string& as, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
+
 
 
 

@@ -1025,24 +1025,29 @@ namespace cppcms { namespace templates {
 			std::cout << "\tparameters " << alist << std::endl;
 #endif
 		} else if(p.reset().try_token_ws("using").try_identifier_ws()) { // 'using' IDENTIFIER  [ 'with' VARIABLE ] as IDENTIFIER  
-			const std::string id = p.get(-2);
-			std::cout << "render: using " << id << std::endl;
+			std::string id, with, as;
+			id = p.get(-2);
 			if(p.try_token_ws("with").try_variable_ws()) {
-				const std::string variable = p.get(-2);
-				std::cout << "\twith " << variable << std::endl;
+				with = p.get(-2);
 			} else {
 				p.back(4);
-				std::cout << "\twith (default)" << std::endl;
 			}
 			if(p.try_token_ws("as").try_identifier_ws()) {
-				const std::string as = p.get(-2);
-				std::cout << "\tas " << as << std::endl;
+				as = p.get(-2);
 			} else {
 				p.back(4).raise("expected 'as' IDENTIFIER");
 			}
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
+
+			// save to tree
+			current_ = current_->as<ast::has_children>().add<ast::using_t>(id, with, as);
+#ifdef PARSER_TRACE
+			std::cout << "render: using " << id << std::endl;
+			std::cout << "\twith " << (with.empty() ? "(current)" : with) << std::endl;
+			std::cout << "\tas " << as << std::endl;
+#endif
 		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]
 			const std::string name = p.get(-5), var = p.get(-3);
 			current_ = current_->as<ast::has_children>().add<ast::form_t>(name, var);
@@ -1412,6 +1417,24 @@ namespace cppcms { namespace templates {
 		
 		void render_t::write(std::ostream& /* o */) {
 		}
+			
+		using_t::using_t(const std::string& id, const std::string& with, const std::string& as, base_ptr parent)
+			: has_children("using", true, parent)
+			, id_(id)
+			, with_(with)
+			, as_(as) {}
+		
+		void using_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "using view type " << id_ << " as " << as_ << " with " << (with_.empty() ? "(current)" : with_) << " content [\n";
+			for(const base_ptr& child : children)
+				child->dump(o, tabs+1);
+			o << p << "]\n";
+		}
+		
+		void using_t::write(std::ostream& /* o */) {
+		}
+			
 
 	}
 }}
