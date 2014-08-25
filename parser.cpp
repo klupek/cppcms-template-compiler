@@ -827,7 +827,7 @@ namespace cppcms { namespace templates {
 //				p.back(3).raise("expected 'end " + current_->sysname() + "'");
 			}
 #ifdef PARSER_TRACE
-			std::cout << "flow: end " << name << "\n";
+			std::cout << "flow: end " << what << "\n";
 #endif
 
 		// 'cache' ( VARIABLE | STRING ) [ 'for' NUMBER ] ['on' 'miss' VARIABLE() ] [ 'no' 'triggers' ] [ 'no' 'recording' ]
@@ -1135,7 +1135,7 @@ namespace cppcms { namespace templates {
 				// save to tree
 				current_ = current_->as<ast::has_children>().add<ast::render_t>(skin, view, with);
 #ifdef PARSER_TRACE
-				std::cout << "render: render\n\tskin = " << (arg2.empty() ? "(default)" : arg1 ) << "\n\tview = " << (arg2.empty() ? arg1 : arg2) << std::endl;
+				std::cout << "render: render\n\tskin = " << (skin.empty() ? "(default)" : skin ) << "\n\tview = " << view << std::endl;
 				if(!with.empty())
 					std::cout << "\twith " << with << std::endl;
 #endif
