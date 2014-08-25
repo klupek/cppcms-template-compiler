@@ -173,6 +173,14 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 		};
 
+		class render_t : public base_t {
+			const std::string skin_, view_, with_;  
+		public:
+			render_t(const std::string& skin, const std::string& view, const std::string& with, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
 
 
 

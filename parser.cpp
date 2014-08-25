@@ -1064,22 +1064,28 @@ namespace cppcms { namespace templates {
 		// 'render' [ ( VARIABLE | STRING ) , ] ( VARIABLE | STRING ) [ 'with' VARIABLE ] 
 		} else if(p.reset().try_token_ws("render")) {
 			if(p.try_variable() || p.back(1).try_string()) {
-				std::string arg1 = p.get(-1), arg2;
+				std::string view = p.get(-1), skin, with;
 				if(p.try_comma().try_variable_ws() || p.back(2).try_string_ws()) {
-					arg2 = p.get(-2);
+					skin = view;
+					view = p.get(-2);
 				} else {
 					p.back(3).skipws(false);
 				}
-				std::cout << "render: render\n\tskin = " << (arg2.empty() ? "(default)" : arg1 ) << "\n\tview = " << (arg2.empty() ? arg1 : arg2) << std::endl;
 				if(p.try_token_ws("with").try_variable_ws()) {
-					const std::string with = p.get(-2);
-					std::cout << "\twith " << with << std::endl;
+					with = p.get(-2);
 				} else {
 					p.back(4);
 				}
 				if(!p.try_token("%>")) {
 					p.raise("expected %>");
 				}
+				// save to tree
+				current_ = current_->as<ast::has_children>().add<ast::render_t>(skin, view, with);
+#ifdef PARSER_TRACE
+				std::cout << "render: render\n\tskin = " << (arg2.empty() ? "(default)" : arg1 ) << "\n\tview = " << (arg2.empty() ? arg1 : arg2) << std::endl;
+				if(!with.empty())
+					std::cout << "\twith " << with << std::endl;
+#endif
 			} else {
 				p.raise("expected STRING or VARIABLE");
 			}
@@ -1381,7 +1387,7 @@ namespace cppcms { namespace templates {
 		}
 		
 		csrf_t::csrf_t(const std::string& style, base_ptr parent)
-			: base_t("form", false, parent)
+			: base_t("csrf", false, parent)
 			, style_(style) {}
 		
 		void csrf_t::dump(std::ostream& o, int tabs) {
@@ -1390,6 +1396,21 @@ namespace cppcms { namespace templates {
 		}
 		
 		void csrf_t::write(std::ostream& /* o */) {
+		}
+		
+		render_t::render_t(const std::string& skin, const std::string& view, const std::string& with, base_ptr parent)
+			: base_t("render", false, parent)
+			, skin_(skin)
+			, view_(view)
+			, with_(with) {}
+		
+		void render_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "render skin = " << (skin_.empty() ? "(current)" : skin_ )
+				<< ", view = " << view_ << " with " << ( with_.empty() ? "(current)" : with_ ) << " content\n";
+		}
+		
+		void render_t::write(std::ostream& /* o */) {
 		}
 
 	}
