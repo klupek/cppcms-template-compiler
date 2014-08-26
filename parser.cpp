@@ -7,7 +7,7 @@ namespace cppcms { namespace templates {
 	static bool is_digit(char c) {
 		return ( c >= '0' && c <= '9' );
 	}
-	/*	
+		
 	static std::string decode_escaped_string(const std::string& input) {
 		std::string result;
 		bool escaped = false;
@@ -85,7 +85,7 @@ namespace cppcms { namespace templates {
 			result += '\\';
 		return result;
 	}
-*/
+
 	
 	static std::string compress_html(const std::string& input) {
 		std::string result(input.length()*2, 0);
@@ -1193,6 +1193,34 @@ namespace cppcms { namespace templates {
 #endif
 	}
 
+	namespace expr {
+		base_t::base_t(const std::string& value)
+			: value_(value) {}
+
+		double number_t::real() const {
+			return boost::lexical_cast<double>(value_);
+		}
+
+		int number_t::integer() const {
+			return boost::lexical_cast<int>(value_);
+		}
+
+		std::string number_t::repr() const {
+			return value_;
+		}
+
+		std::string variable_t::repr() const {
+			return value_;
+		}
+
+		std::string string_t::repr() const { 
+			return value_;
+		}
+
+		std::string string_t::unescaped() const {
+			return decode_escaped_string(value_);
+		}
+	}
 	namespace ast {
 		base_t::base_t(const std::string& sysname, bool block, base_ptr parent)
 			: sysname_(sysname)

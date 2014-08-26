@@ -9,8 +9,52 @@
 #include <map>
 #include <boost/lexical_cast.hpp>
 
-namespace cppcms { namespace templates { 
+namespace cppcms { namespace templates {
+	namespace expr {      	
+		class number_t;
+		class variable_t;
+		class string_t;
+
+		class base_t {
+		protected:
+			const std::string value_;
+		public:
+			explicit base_t(const std::string& value);
+
+			template<typename T>
+			bool is_a() const { return dynamic_cast<const T*>(this) != nullptr; }
+
+			template<typename T>
+			T& as() { return dynamic_cast<T&>(*this); }
+			
+			virtual std::string repr() const = 0;
+			virtual ~base_t() {}
+		};
+
+		class number_t : public base_t {
+		public:
+			using base_t::base_t;
+			double real() const;
+			int integer() const;
+			virtual std::string repr() const;
+		};
+
+		class variable_t : public base_t {
+		public:
+			using base_t::base_t;
+			virtual std::string repr() const;
+		};
+
+		class string_t : public base_t {
+		public:
+			using base_t::base_t;
+			std::string repr() const;
+			virtual std::string unescaped() const;
+		};
+	}
+
 	namespace ast {
+
 		class base_t;
 		class view_t;
 		class root_t;
@@ -34,6 +78,7 @@ namespace cppcms { namespace templates {
 			base_t(const std::string& sysname, bool block, base_ptr parent);
 
 		public:
+			virtual ~base_t() {}
 			template<typename T>
 			bool is_a() const { return dynamic_cast<const T*>(this) != nullptr; }
 
