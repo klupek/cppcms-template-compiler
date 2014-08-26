@@ -15,6 +15,7 @@ namespace cppcms { namespace templates {
 		class number_t;
 		class variable_t;
 		class string_t;
+		class filter_t;
 		class name_t;
 		class identifier_t;
 		class call_list_t;
@@ -23,6 +24,7 @@ namespace cppcms { namespace templates {
 		typedef std::shared_ptr<base_t> ptr;
 		typedef std::shared_ptr<number_t> number;
 		typedef std::shared_ptr<variable_t> variable;
+		typedef std::shared_ptr<filter_t> filter;
 		typedef std::shared_ptr<string_t> string;
 		typedef std::shared_ptr<name_t> name;
 		typedef std::shared_ptr<identifier_t> identifier;
@@ -31,6 +33,7 @@ namespace cppcms { namespace templates {
 
 		number make_number(const std::string& repr);
 		variable make_variable(const std::string& repr);
+		filter make_filter(const std::string& repr);
 		string make_string(const std::string& repr);
 		name make_name(const std::string& repr);
 		identifier make_identifier(const std::string& repr);
@@ -65,6 +68,15 @@ namespace cppcms { namespace templates {
 		public:
 			using base_t::base_t;
 			virtual std::string repr() const;
+		};
+		
+		class filter_t : public base_t {
+			typedef std::vector<ptr> arguments_t;
+			arguments_t arguments_;
+		public:
+			filter_t(const std::string& value);
+			virtual std::string repr() const;
+			const std::vector<ptr>& arguments() const;
 		};
 
 		class string_t : public base_t {
@@ -104,6 +116,8 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj);
 		std::ostream& operator<<(std::ostream& o, const param_list_t& obj);
 		std::ostream& operator<<(std::ostream& o, const call_list_t& obj);
+		std::ostream& operator<<(std::ostream& o, const filter_t& obj);
+		std::ostream& operator<<(std::ostream& o, const variable_t& obj);
 	}
 
 	namespace ast {
@@ -232,10 +246,10 @@ namespace cppcms { namespace templates {
 		};
 
 		class variable_t : public base_t {
-			const std::string name_;
-			const std::vector<std::string> filters_;
+			const expr::variable name_;
+			const std::vector<expr::filter> filters_;
 		public:
-			variable_t(const std::string& name, const std::vector<std::string>& filters, base_ptr parent);
+			variable_t(const expr::variable& name, const std::vector<expr::filter>& filters, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);

@@ -128,6 +128,70 @@ namespace cppcms { namespace templates {
 		return result;
 	}
 
+	expr::ptr recognize_expr(const std::string& input) {
+		const std::string trimmed = trim(input);
+		if(trimmed[0] == '"')
+			return expr::make_string(trimmed);
+		else if(trimmed.length() >= 3 && trimmed[0] == '0' && trimmed[1] == 'x')
+			return expr::make_number(trimmed);
+		else if(std::all_of(trimmed.begin(), trimmed.end(), [](char c) {
+			return c == '-' || c == '.' || c == '+' || (c >= '0' && c <= '9');
+		})) {
+			return expr::make_number(trimmed);
+		} else
+			return expr::make_variable(trimmed);
+	}
+
+	std::pair<std::string, std::vector<expr::ptr>> split_function_call(const std::string& call) {
+		typedef std::pair<std::string, std::vector<expr::ptr>> result_t;
+		result_t result;
+		size_t beg = call.find("("), end = call.length();
+		if(beg == std::string::npos) {
+			result.first = call;
+			return result;
+		} else {
+			result.first = std::string(&call[0], &call[beg]);
+			// parse c++ expression
+			// bracket counts, a = (), b = [], c = <>
+			int brackets_a = 0, brackets_b = 0, brackets_c = 0;
+			// in string
+			bool string = false, escaped = false;
+			size_t next = beg+1;
+
+			for(size_t i = beg+1; i < end-1; ++i) {
+				const char c = call[i];
+				if((brackets_a == 0 && brackets_b == 0 && brackets_c == 0 
+					&& !string && c == ',') || i == end-1) {
+					const std::string arg(&call[next], &call[i]);					
+					result.second.emplace_back(recognize_expr(arg));
+					next = i+1;
+				} else if(c == '(' && !string) 
+					brackets_a++;
+				else if(c == ')' && !string)
+					brackets_a--;
+				else if(c == '[' && !string)
+					brackets_b++;
+				else if(c == ']' && !string)
+					brackets_b--;
+				else if(c == '<' && !string)
+					brackets_c++;
+				else if(c == '>' && !string)
+					brackets_c--;
+				else if(c == '"' && !string) 
+					string = true;
+				else if(c == '"' && string && !escaped)
+					string = false;
+				else if(c == '\\' && string && !escaped)
+					escaped = true;
+				else {
+					escaped = false;
+				}
+			}
+			result.second.emplace_back(recognize_expr(std::string(&call[next], &call[end-1])));
+			return result;
+		}
+	}
+
 	parser::parser(const std::string& input)
 		: input_(input)
 		, index_(0)
@@ -1177,13 +1241,14 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_variable_expression() {
 		p.push();
 		if(p.try_complex_variable().skipws(false).try_token("%>")) { // [ variable expression, \s*, %> ]
-			const std::string expr = p.details().top().item;
-			std::vector<std::string> filters;
+			const expr::variable expr = expr::make_variable(p.details().top().item);
+			std::vector<expr::filter> filters;
 			p.details().pop();
 			while(!p.details().empty() && p.details().top().what == "complex_variable") {
-				filters.emplace_back(p.details().top().item);
+				filters.emplace_back(expr::make_filter(p.details().top().item));
 				p.details().pop();
 			}
+			
 			current_ = current_->as<ast::has_children>().add<ast::variable_t>(expr, filters);
 #ifdef PARSER_TRACE
 			std::cout << "variable: " << expr << std::endl;
@@ -1233,6 +1298,27 @@ namespace cppcms { namespace templates {
 		std::string string_t::repr() const { 
 			return value_;
 		}
+		
+
+		filter_t::filter_t(const std::string& value)
+			: base_t(split_function_call(value).first)
+			, arguments_(split_function_call(value).second) {}
+
+		std::string filter_t::repr() const { 
+			std::string result = value_;
+			if(!arguments_.empty()) {
+				result += "(";
+				for(const ptr& argument : arguments_) {
+					result += argument->repr() + ",";
+				}
+				result[result.length()-1] = ')';
+			}
+			return result;
+		}
+			
+		const std::vector<ptr>& filter_t::arguments() const {
+			return arguments_;
+		}
 
 		std::string string_t::unescaped() const {
 			return decode_escaped_string(value_);
@@ -1266,6 +1352,10 @@ namespace cppcms { namespace templates {
 
 		variable make_variable(const std::string& repr) {
 			return std::make_shared<variable_t>(repr);
+		}
+		
+		filter make_filter(const std::string& repr) {
+			return std::make_shared<filter_t>(repr);
 		}
 
 		string make_string(const std::string& repr) {
@@ -1302,6 +1392,14 @@ namespace cppcms { namespace templates {
 		
 		std::ostream& operator<<(std::ostream& o, const param_list_t& obj) {
 			return o << "[paramlist:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const filter_t& obj) {
+			return o << "[filter:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const variable_t& obj) {
+			return o << "[variable:" << obj.repr() << "]";
 		}
 			
 	}
@@ -1470,20 +1568,20 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		variable_t::variable_t(const std::string& name, const std::vector<std::string>& filters, base_ptr parent)
+		variable_t::variable_t(const expr::variable& name, const std::vector<expr::filter>& filters, base_ptr parent)
 			: base_t("variable", false, parent)
 			, name_(name)
 			, filters_(filters) {}
 
 		void variable_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "variable: " << name_;
+			o << p << "variable: " << *name_;
 			if(filters_.empty())
 				o << " without filters\n";
 			else {
 				o << " with filters: "; 
-				for(const std::string& filter : filters_) 
-					o << " | " << filter;
+				for(const expr::filter& filter : filters_) 
+					o << " | " << *filter;
 				o << std::endl;
 			}
 		}
