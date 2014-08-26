@@ -50,6 +50,7 @@ namespace cppcms { namespace templates {
 
 			virtual void write(std::ostream&) = 0;
 			virtual void dump(std::ostream& o, int tabs = 0) = 0;
+			virtual base_ptr end(const std::string& what) = 0;
 			base_ptr parent();
 			const std::string& sysname() const;
 			bool block() const;
@@ -65,12 +66,12 @@ namespace cppcms { namespace templates {
 		public:
 			root_t();
 			base_ptr add_skin(const std::string& name);
-			base_ptr end_skin();
 			base_ptr set_mode(const std::string& mode);
 			base_ptr add_cpp(const std::string& code);
 			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 			// TODO: add .clear() method, circular dependencies in shared pointers
 		};	
 		
@@ -83,6 +84,7 @@ namespace cppcms { namespace templates {
 			virtual void dump(std::ostream& o, int tabs = 0);
 			view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 		
 		class has_children : public base_t {
@@ -115,6 +117,7 @@ namespace cppcms { namespace templates {
 			template_t(const std::string& name, const std::string& arguments, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 			
 		};
 
@@ -125,6 +128,7 @@ namespace cppcms { namespace templates {
 			cppcode_t(const std::string& code_, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class variable_t : public base_t {
@@ -134,6 +138,7 @@ namespace cppcms { namespace templates {
 			variable_t(const std::string& name, const std::vector<std::string>& filters, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 			
 		struct using_option_t {
@@ -150,6 +155,7 @@ namespace cppcms { namespace templates {
 			fmt_function_t(const std::string& name, const std::string& fmt, const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class ngt_t : public base_t {
@@ -159,6 +165,7 @@ namespace cppcms { namespace templates {
 			ngt_t(const std::string& singular, const std::string& plural, const std::string& variable, const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class include_t : public base_t {
@@ -168,6 +175,7 @@ namespace cppcms { namespace templates {
 			include_t(const std::string& name, const std::string& from, const std::string& _using, const std::string& with, const std::vector<std::string>& arguments, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class form_t : public base_t {
@@ -176,6 +184,7 @@ namespace cppcms { namespace templates {
 			form_t(const std::string& style, const std::string& name, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 		
 		class csrf_t : public base_t {
@@ -184,6 +193,7 @@ namespace cppcms { namespace templates {
 			csrf_t(const std::string& style, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class render_t : public base_t {
@@ -192,6 +202,7 @@ namespace cppcms { namespace templates {
 			render_t(const std::string& skin, const std::string& view, const std::string& with, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class using_t : public has_children {
@@ -200,6 +211,7 @@ namespace cppcms { namespace templates {
 			using_t(const std::string& id, const std::string& with, const std::string& as, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class if_t : public has_children {
@@ -214,6 +226,7 @@ namespace cppcms { namespace templates {
 				condition_t(type_t type, const std::string& cond, const std::string& variable, bool negate, base_ptr parent);
 				virtual void dump(std::ostream& o, int tabs = 0);
 				virtual void write(std::ostream& o);
+				virtual base_ptr end(const std::string& what);
 			};
 			typedef std::shared_ptr<condition_t> condition_ptr;
 			std::vector< condition_ptr > conditions_;
@@ -226,9 +239,16 @@ namespace cppcms { namespace templates {
 			
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 		class foreach_t : public base_t {
+			class part_t : public has_children {
+				bool has_end_;
+			public:
+				part_t(const std::string& sysname, bool has_end, base_ptr parent);
+				virtual base_ptr end(const std::string& what);
+			};
 			const std::string name_, as_, rowid_, array_;
 			const bool reverse_;
 			base_ptr empty_, separator_, item_;
@@ -237,6 +257,7 @@ namespace cppcms { namespace templates {
 			foreach_t(const std::string& name, const std::string& as, const std::string& rowid, const std::string& array, bool reverse, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 
 			base_ptr prefix();
 			base_ptr empty();
@@ -255,6 +276,7 @@ namespace cppcms { namespace templates {
 			base_ptr add_trigger(const std::string&);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
+			virtual base_ptr end(const std::string& what);
 		};
 
 
