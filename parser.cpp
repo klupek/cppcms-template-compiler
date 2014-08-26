@@ -1177,15 +1177,16 @@ namespace cppcms { namespace templates {
 			std::cout << "\tparameters " << alist << std::endl;
 #endif
 		} else if(p.reset().try_token_ws("using").try_identifier_ws()) { // 'using' IDENTIFIER  [ 'with' VARIABLE ] as IDENTIFIER  
-			std::string id, with, as;
-			id = p.get(-2);
+			expr::identifier id, as;
+			expr::variable with;
+			id = expr::make_identifier(p.get(-2));
 			if(p.try_token_ws("with").try_variable_ws()) {
-				with = p.get(-2);
+				with = expr::make_variable(p.get(-2));
 			} else {
 				p.back(4);
 			}
 			if(p.try_token_ws("as").try_identifier_ws()) {
-				as = p.get(-2);
+				as = expr::make_identifier(p.get(-2));
 			} else {
 				p.back(4).raise("expected 'as' IDENTIFIER");
 			}
@@ -1805,7 +1806,7 @@ namespace cppcms { namespace templates {
 		void render_t::write(std::ostream& /* o */) {
 		}
 			
-		using_t::using_t(const std::string& id, const std::string& with, const std::string& as, base_ptr parent)
+		using_t::using_t(const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent)
 			: has_children("using", true, parent)
 			, id_(id)
 			, with_(with)
@@ -1813,7 +1814,12 @@ namespace cppcms { namespace templates {
 		
 		void using_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "using view type " << id_ << " as " << as_ << " with " << (with_.empty() ? "(current)" : with_) << " content [\n";
+			o << p << "using view type " << *id_ << " as " << *as_ << " with ";
+			if(with_)
+				o << *with_;
+			else
+				o << "(current)";
+			o << " content [\n";
 			for(const base_ptr& child : children)
 				child->dump(o, tabs+1);
 			o << p << "]\n";

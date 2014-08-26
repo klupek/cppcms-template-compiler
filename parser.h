@@ -331,9 +331,11 @@ namespace cppcms { namespace templates {
 		};
 
 		class using_t : public has_children {
-			const std::string id_, with_, as_;
+			const expr::identifier id_;
+			const expr::variable with_;
+			const expr::identifier as_;
 		public:
-			using_t(const std::string& id, const std::string& with, const std::string& as, base_ptr parent);
+			using_t(const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
