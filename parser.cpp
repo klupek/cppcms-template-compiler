@@ -948,7 +948,9 @@ namespace cppcms { namespace templates {
 			const std::string function_name = p.get(-3), arguments = p.get(-2);
 			
 			// save to tree
-			current_ = current_->as<ast::view_t>().add_template(function_name, arguments);
+			current_ = current_->as<ast::view_t>().add_template(
+					expr::make_name(function_name),
+					expr::make_param_list(arguments));
 #ifdef PARSER_TRACE
 			std::cout << "global: template " << function_name << "\n";
 #endif
@@ -1231,6 +1233,14 @@ namespace cppcms { namespace templates {
 		std::string identifier_t::repr() const {
 			return value_;
 		}
+		
+		std::string call_list_t::repr() const {
+			return value_;
+		}
+		
+		std::string param_list_t::repr() const {
+			return value_;
+		}
 
 		bool name_t::operator<(const name_t& rhs) const {
 			return repr() < rhs.repr();
@@ -1256,12 +1266,28 @@ namespace cppcms { namespace templates {
 			return std::make_shared<identifier_t>(repr);
 		}
 		
+		call_list make_call_list(const std::string& repr) {
+			return std::make_shared<call_list_t>(repr);
+		}
+		
+		param_list make_param_list(const std::string& repr) {
+			return std::make_shared<param_list_t>(repr);
+		}
+		
 		std::ostream& operator<<(std::ostream& o, const name_t& obj) {
 			return o << "[name:" << obj.repr() << "]";
 		}
 		
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj) {
 			return o << "[id:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const call_list_t& obj) {
+			return o << "[calllist:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const param_list_t& obj) {
+			return o << "[paramlist:" << obj.repr() << "]";
 		}
 			
 	}
@@ -1357,9 +1383,9 @@ namespace cppcms { namespace templates {
 		void template_t::write(std::ostream& /* o */) {
 		}
 
-		base_ptr view_t::add_template(const std::string& name, const std::string& arguments) {
+		base_ptr view_t::add_template(const expr::name& name, const expr::param_list& arguments) {
 			return templates.emplace(
-				name, std::make_shared<template_t>(name, arguments, shared_from_this())
+				*name, std::make_shared<template_t>(name, arguments, shared_from_this())
 			).first->second;
 		}
 		view_t::view_t(const expr::name& name, const expr::identifier& data, const expr::name& master, base_ptr parent)
@@ -1393,7 +1419,7 @@ namespace cppcms { namespace templates {
 		
 		void has_children::write(std::ostream& /* o */) {}
 
-		template_t::template_t(const std::string& name, const std::string& arguments, base_ptr parent) 
+		template_t::template_t(const expr::name& name, const expr::param_list& arguments, base_ptr parent) 
 			: has_children("template", true, parent)
 	       		, name_(name) 
 			, arguments_(arguments) {}
@@ -1408,7 +1434,7 @@ namespace cppcms { namespace templates {
 
 		void template_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "template " << name_ << " with arguments " << arguments_ << " and " << children.size() << " children [\n";
+			o << p << "template " << *name_ << " with arguments " << *arguments_ << " and " << children.size() << " children [\n";
 			for(const base_ptr& child : children)
 				child->dump(o, tabs+1);
 			o << p << "]\n";

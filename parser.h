@@ -17,6 +17,8 @@ namespace cppcms { namespace templates {
 		class string_t;
 		class name_t;
 		class identifier_t;
+		class call_list_t;
+		class param_list_t;
 
 		typedef std::shared_ptr<base_t> ptr;
 		typedef std::shared_ptr<number_t> number;
@@ -24,12 +26,16 @@ namespace cppcms { namespace templates {
 		typedef std::shared_ptr<string_t> string;
 		typedef std::shared_ptr<name_t> name;
 		typedef std::shared_ptr<identifier_t> identifier;
+		typedef std::shared_ptr<call_list_t> call_list;
+		typedef std::shared_ptr<param_list_t> param_list;
 
 		number make_number(const std::string& repr);
 		variable make_variable(const std::string& repr);
 		string make_string(const std::string& repr);
 		name make_name(const std::string& repr);
 		identifier make_identifier(const std::string& repr);
+		call_list make_call_list(const std::string& repr);
+		param_list make_param_list(const std::string& repr);
 		
 		class base_t {
 		protected:
@@ -80,9 +86,23 @@ namespace cppcms { namespace templates {
 			using base_t::base_t;
 			std::string repr() const;
 		};
+		
+		class call_list_t : public base_t {
+		public:
+			using base_t::base_t;
+			std::string repr() const;
+		};
+		
+		class param_list_t : public base_t {
+		public:
+			using base_t::base_t;
+			std::string repr() const;
+		};
 
 		std::ostream& operator<<(std::ostream& o, const name_t& obj);
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj);
+		std::ostream& operator<<(std::ostream& o, const param_list_t& obj);
+		std::ostream& operator<<(std::ostream& o, const call_list_t& obj);
 	}
 
 	namespace ast {
@@ -153,12 +173,12 @@ namespace cppcms { namespace templates {
 		};	
 		
 		class view_t : public base_t {
-			typedef std::map<std::string, template_ptr> templates_t;
+			typedef std::map<expr::name_t, template_ptr> templates_t;
 			templates_t templates;
 			const expr::name name_, master_;
 			const expr::identifier data_;
 		public:
-			base_ptr add_template(const std::string& name, const std::string& arguments);
+			base_ptr add_template(const expr::name& name, const expr::param_list& arguments);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			view_t(const expr::name& name, const expr::identifier& data, const expr::name& master, base_ptr parent);
 			virtual void write(std::ostream& o);
@@ -190,9 +210,10 @@ namespace cppcms { namespace templates {
 		};
 
 		class template_t : public has_children {
-			const std::string name_, arguments_;
+			const expr::name name_;
+			const expr::param_list arguments_;
 		public:
-			template_t(const std::string& name, const std::string& arguments, base_ptr parent);
+			template_t(const expr::name& name, const expr::param_list& arguments, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
