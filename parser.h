@@ -51,6 +51,9 @@ namespace cppcms { namespace templates {
 
 			template<typename T>
 			T& as() { return dynamic_cast<T&>(*this); }
+			
+			template<typename T>
+			const T& as() const { return dynamic_cast<const T&>(*this); }
 
 			virtual std::string repr() const = 0;
 			virtual ~base_t() {}
@@ -117,6 +120,7 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const call_list_t& obj);
 		std::ostream& operator<<(std::ostream& o, const filter_t& obj);
 		std::ostream& operator<<(std::ostream& o, const variable_t& obj);
+		std::ostream& operator<<(std::ostream& o, const base_t& obj);		
 	}
 
 	namespace ast {
@@ -317,9 +321,10 @@ namespace cppcms { namespace templates {
 		};
 
 		class render_t : public base_t {
-			const std::string skin_, view_, with_;  
+			const expr::ptr skin_, view_;
+			const expr::variable with_;
 		public:
-			render_t(const std::string& skin, const std::string& view, const std::string& with, base_ptr parent);
+			render_t(const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);

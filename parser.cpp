@@ -1221,32 +1221,42 @@ namespace cppcms { namespace templates {
 #endif
 		// 'render' [ ( VARIABLE | STRING ) , ] ( VARIABLE | STRING ) [ 'with' VARIABLE ] 
 		} else if(p.reset().try_token_ws("render")) {
-			if(p.try_variable() || p.back(1).try_string()) {
-				std::string view = p.get(-1), skin, with;
-				if(p.try_comma().try_variable_ws() || p.back(2).try_string_ws()) {
-					skin = view;
-					view = p.get(-2);
-				} else {
-					p.back(3).skipws(false);
-				}
-				if(p.try_token_ws("with").try_variable_ws()) {
-					with = p.get(-2);
-				} else {
-					p.back(4);
-				}
-				if(!p.try_token("%>")) {
-					p.raise("expected %>");
-				}
-				// save to tree
-				current_ = current_->as<ast::has_children>().add<ast::render_t>(skin, view, with);
-#ifdef PARSER_TRACE
-				std::cout << "render: render\n\tskin = " << (skin.empty() ? "(default)" : skin ) << "\n\tview = " << view << std::endl;
-				if(!with.empty())
-					std::cout << "\twith " << with << std::endl;
-#endif
+			expr::ptr skin, view;
+			expr::variable with;
+			if(p.try_variable()) {
+				view = expr::make_variable(p.get(-1));
+			} else if(p.back(1).try_string()) {
+				view = expr::make_string(p.get(-1));
 			} else {
 				p.raise("expected STRING or VARIABLE");
 			}
+				
+			if(p.try_comma().try_variable_ws()) {
+				skin = view;
+				view = expr::make_variable(p.get(-2));
+			} else if(p.back(2).try_string_ws()) {
+				skin = view;
+				view = expr::make_string(p.get(-2));
+			} else {
+				p.back(3).skipws(false);
+			}
+			
+			if(p.try_token_ws("with").try_variable_ws()) {
+				with = expr::make_variable(p.get(-2));
+			} else {
+				p.back(4);
+			}
+			
+			if(!p.try_token("%>")) {
+				p.raise("expected %>");
+			}
+			// save to tree
+			current_ = current_->as<ast::has_children>().add<ast::render_t>(skin, view, with);
+#ifdef PARSER_TRACE
+			std::cout << "render: render\n\tskin = " << (skin.empty() ? "(default)" : skin ) << "\n\tview = " << view << std::endl;
+			if(!with.empty())
+				std::cout << "\twith " << with << std::endl;
+#endif
 		} else {
 			p.reset();
 			return false;
@@ -1410,6 +1420,21 @@ namespace cppcms { namespace templates {
 		
 		std::ostream& operator<<(std::ostream& o, const variable_t& obj) {
 			return o << "[variable:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const base_t& obj) {
+			// currently only usefull types are detected
+			o << "[autodetect:";
+			if(obj.is_a<number_t>())
+				o << obj.as<number_t>();
+			else if(obj.is_a<variable_t>())
+				o << obj.as<variable_t>();
+			else if(obj.is_a<string_t>())
+				o << obj.as<string_t>();
+			else
+				throw std::logic_error(std::string("could not autodetect type ") + typeid(obj).name());
+			o << "]";
+			return o;
 		}
 			
 	}
@@ -1751,7 +1776,7 @@ namespace cppcms { namespace templates {
 		void csrf_t::write(std::ostream& /* o */) {
 		}
 		
-		render_t::render_t(const std::string& skin, const std::string& view, const std::string& with, base_ptr parent)
+		render_t::render_t(const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent)
 			: base_t("render", false, parent)
 			, skin_(skin)
 			, view_(view)
@@ -1759,8 +1784,18 @@ namespace cppcms { namespace templates {
 		
 		void render_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "render skin = " << (skin_.empty() ? "(current)" : skin_ )
-				<< ", view = " << view_ << " with " << ( with_.empty() ? "(current)" : with_ ) << " content\n";
+			o << p << "render skin = ";
+			if(skin_)
+				o << *skin_;
+			else 
+				o << "(current)";
+
+			o << ", view = " << *view_ << " with " ;
+			if(with_)
+				o << *with_;
+			else 
+				o << "(current)";
+			o << " content\n";
 		}
 		
 		base_ptr render_t::end(const std::string&) {
