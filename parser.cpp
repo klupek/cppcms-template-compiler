@@ -1201,7 +1201,8 @@ namespace cppcms { namespace templates {
 			std::cout << "\tas " << as << std::endl;
 #endif
 		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]
-			const std::string name = p.get(-5), var = p.get(-3);
+			const expr::name name = expr::make_name(p.get(-5));
+			const expr::variable var = expr::make_variable(p.get(-3));
 			current_ = current_->as<ast::has_children>().add<ast::form_t>(name, var);
 #ifdef PARSER_TRACE
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
@@ -1714,14 +1715,14 @@ namespace cppcms { namespace templates {
 		void include_t::write(std::ostream& /* o */) {
 		}
 
-		form_t::form_t(const std::string& style, const std::string& name, base_ptr parent)
+		form_t::form_t(const expr::name& style, const expr::variable& name, base_ptr parent)
 			: base_t("form", false, parent)
 			, style_(style)
 			, name_(name) {}
 		
 		void form_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "form style = " << style_ << " using variable " << name_ << std::endl;
+			o << p << "form style = " << *style_ << " using variable " << *name_ << std::endl;
 		}
 		
 		base_ptr form_t::end(const std::string&) {

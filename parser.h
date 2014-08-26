@@ -298,9 +298,10 @@ namespace cppcms { namespace templates {
 		};
 
 		class form_t : public base_t {
-			const std::string style_, name_;
+			const expr::name style_;
+			const expr::variable name_;
 		public:
-			form_t(const std::string& style, const std::string& name, base_ptr parent);
+			form_t(const expr::name& style, const expr::variable& name, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
