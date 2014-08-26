@@ -10,11 +10,27 @@
 #include <boost/lexical_cast.hpp>
 
 namespace cppcms { namespace templates {
-	namespace expr {      	
+	namespace expr {    
+		class base_t;	
 		class number_t;
 		class variable_t;
 		class string_t;
+		class name_t;
+		class identifier_t;
 
+		typedef std::shared_ptr<base_t> ptr;
+		typedef std::shared_ptr<number_t> number;
+		typedef std::shared_ptr<variable_t> variable;
+		typedef std::shared_ptr<string_t> string;
+		typedef std::shared_ptr<name_t> name;
+		typedef std::shared_ptr<identifier_t> identifier;
+
+		number make_number(const std::string& repr);
+		variable make_variable(const std::string& repr);
+		string make_string(const std::string& repr);
+		name make_name(const std::string& repr);
+		identifier make_identifier(const std::string& repr);
+		
 		class base_t {
 		protected:
 			const std::string value_;
@@ -26,7 +42,7 @@ namespace cppcms { namespace templates {
 
 			template<typename T>
 			T& as() { return dynamic_cast<T&>(*this); }
-			
+
 			virtual std::string repr() const = 0;
 			virtual ~base_t() {}
 		};
@@ -51,6 +67,22 @@ namespace cppcms { namespace templates {
 			std::string repr() const;
 			virtual std::string unescaped() const;
 		};
+
+		class name_t : public base_t {
+		public:
+			using base_t::base_t;
+			bool operator<(const name_t& rhs) const;
+			std::string repr() const;
+		};
+		
+		class identifier_t : public base_t {
+		public:
+			using base_t::base_t;
+			std::string repr() const;
+		};
+
+		std::ostream& operator<<(std::ostream& o, const name_t& obj);
+		std::ostream& operator<<(std::ostream& o, const identifier_t& obj);
 	}
 
 	namespace ast {
@@ -103,17 +135,17 @@ namespace cppcms { namespace templates {
 
 		class root_t : public base_t {
 			std::vector<std::string> codes;
-			typedef std::map< std::string, view_ptr > view_set_t;
-			typedef std::map< std::string, view_set_t > skins_t;
+			typedef std::map< expr::name_t, view_ptr > view_set_t;
+			typedef std::map< expr::name_t, view_set_t > skins_t;
 			skins_t skins;
 			skins_t::iterator current_skin;
 			std::string mode_;
 		public:
 			root_t();
-			base_ptr add_skin(const std::string& name);
+			base_ptr add_skin(const expr::name& name);
 			base_ptr set_mode(const std::string& mode);
 			base_ptr add_cpp(const std::string& code);
-			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
+			base_ptr add_view(const expr::name& name, const expr::identifier& data, const expr::name& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
@@ -123,11 +155,12 @@ namespace cppcms { namespace templates {
 		class view_t : public base_t {
 			typedef std::map<std::string, template_ptr> templates_t;
 			templates_t templates;
-			const std::string name_, data_, master_;
+			const expr::name name_, master_;
+			const expr::identifier data_;
 		public:
 			base_ptr add_template(const std::string& name, const std::string& arguments);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent);
+			view_t(const expr::name& name, const expr::identifier& data, const expr::name& master, base_ptr parent);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
 		};

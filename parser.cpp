@@ -911,7 +911,7 @@ namespace cppcms { namespace templates {
 			p.pop();
 			
 			// save to tree			
-			current_ = current_->as<ast::root_t>().add_skin(skin_name);
+			current_ = current_->as<ast::root_t>().add_skin(expr::make_name(skin_name));
 #ifdef PARSER_TRACE
 			std::cout << "global: skin " << skin_name << "\n";
 #endif
@@ -931,8 +931,12 @@ namespace cppcms { namespace templates {
 			} else {
 				p.reset().raise("expected view NAME uses IDENTIFIER [extends NAME]");
 			}
-			if(p.try_token_nl("%>")) {
-				current_ = current_->as<ast::root_t>().add_view(view_name, data_name, parent_name);
+			if(p.try_token("%>")) {
+				expr::name parent_name_ = (parent_name.empty() ? expr::name() : expr::make_name(parent_name));
+				current_ = current_->as<ast::root_t>().add_view(
+					expr::make_name(view_name), 
+					expr::make_identifier(data_name), 
+					parent_name_);
 #ifdef PARSER_TRACE
 				std::cout << "global: view " << view_name << "/" << data_name << "/" << parent_name << "\n";
 #endif
@@ -1220,6 +1224,46 @@ namespace cppcms { namespace templates {
 		std::string string_t::unescaped() const {
 			return decode_escaped_string(value_);
 		}
+		std::string name_t::repr() const {
+			return value_;
+		}
+		
+		std::string identifier_t::repr() const {
+			return value_;
+		}
+
+		bool name_t::operator<(const name_t& rhs) const {
+			return repr() < rhs.repr();
+		}
+		
+		number make_number(const std::string& repr) {
+			return std::make_shared<number_t>(repr);
+		}
+
+		variable make_variable(const std::string& repr) {
+			return std::make_shared<variable_t>(repr);
+		}
+
+		string make_string(const std::string& repr) {
+			return std::make_shared<string_t>(repr);
+		}
+
+		name make_name(const std::string& repr) {
+			return std::make_shared<name_t>(repr);
+		}
+		
+		identifier make_identifier(const std::string& repr) {
+			return std::make_shared<identifier_t>(repr);
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const name_t& obj) {
+			return o << "[name:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const identifier_t& obj) {
+			return o << "[id:" << obj.repr() << "]";
+		}
+			
 	}
 	namespace ast {
 		base_t::base_t(const std::string& sysname, bool block, base_ptr parent)
@@ -1239,8 +1283,8 @@ namespace cppcms { namespace templates {
 			: base_t("root", true, nullptr)		
  			, current_skin(skins.end()) {}
 
-		base_ptr root_t::add_skin(const std::string& name) {
-			current_skin = skins.emplace( name, view_set_t() ).first;
+		base_ptr root_t::add_skin(const expr::name& name) {
+			current_skin = skins.emplace( *name, view_set_t() ).first;
 			return shared_from_this();
 		}
 
@@ -1254,12 +1298,12 @@ namespace cppcms { namespace templates {
 			return shared_from_this();
 		}
 			
-		base_ptr root_t::add_view(const std::string& name, const std::string& data, const std::string& parent) {
+		base_ptr root_t::add_view(const expr::name& name, const expr::identifier& data, const expr::name& parent) {
 			if(current_skin == skins.end())
 				throw std::runtime_error("view must be inside skin");
 			
 			return current_skin->second.emplace(
-				name, std::make_shared<view_t>(name, data, parent, shared_from_this())
+				*name, std::make_shared<view_t>(name, data, parent, shared_from_this())
 			).first->second;
 		}
 
@@ -1318,16 +1362,21 @@ namespace cppcms { namespace templates {
 				name, std::make_shared<template_t>(name, arguments, shared_from_this())
 			).first->second;
 		}
-		view_t::view_t(const std::string& name, const std::string& data, const std::string& master, base_ptr parent)
+		view_t::view_t(const expr::name& name, const expr::identifier& data, const expr::name& master, base_ptr parent)
 			: base_t("view", true, parent)
 			, name_(name)
-			, data_(data)
-			, master_(master) {}
+			, master_(master) 
+			, data_(data) {}
 		
 		void view_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "view " << name_ << " uses " << data_ << " extends " << ( master_.empty() ? "(default)" : master_ ) 
-				<< " with " << templates.size() << " templates {\n";
+			o << p << "view " << *name_ << " uses " << *data_ << " extends ";
+			if(master_)
+				o << *master_;
+			else
+				o << "(default)";
+
+			o << " with " << templates.size() << " templates {\n";
 			for(const templates_t::value_type& templ : templates) {
 				templ.second->dump(o, tabs+1);
 			}
