@@ -1136,23 +1136,23 @@ namespace cppcms { namespace templates {
 			std::cout << "render: url " << url << std::endl;
 #endif
 		} else if(p.reset().try_token_ws("include").try_identifier()) { // [ include, \s+, identifier ]
-			const std::string id = p.get(-1);
-			std::string from, _using, with;
+			std::string expr = p.get(-1);
+			expr::call_list id;
+			expr::identifier from, _using;
+			expr::variable with;
 			p.skipws(false);
 			p.try_argument_list(); // [ argument_list ], cant fail
-			std::vector<std::string> arguments;
-			while(!p.details().empty()) {
-				arguments.insert(arguments.begin(), p.details().top().item);
-				p.details().pop();
-			}
+			id = expr::make_call_list(expr + p.get(-1));
+			while(!p.details().empty()) 
+				p.details().pop(); // aka p.details().clear();
 
 			const std::string alist = p.get(-1);
-			if(p.skipws(true).try_token_ws("from").try_identifier_ws()) { // [ \s+, from, \s+, ID, \s+ ]	
-				from = p.get(-2);
+			if(p.skipws(true).try_token_ws("from").try_identifier_ws()) { // [ \s+, from, \s+, ID, \s+ ]
+				from = expr::make_identifier(p.get(-2));
 			} else if(p.back(4).try_token_ws("using").try_identifier_ws()) { // [ \s+, using, \s+, ID, \s+ ]
-				_using = p.get(-2);
+				_using = expr::make_identifier(p.get(-2));
 				if(p.try_token_ws("with").try_variable_ws()) { // [ with, \s+, VAR, \s+ ]
-					with = p.get(-2);
+					with = expr::make_variable(p.get(-2));
 				} else {
 					p.back(4);
 				} 
@@ -1162,7 +1162,7 @@ namespace cppcms { namespace templates {
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
-			current_ = current_->as<ast::has_children>().add<ast::include_t>(id, from, _using, with, arguments);
+			current_ = current_->as<ast::has_children>().add<ast::include_t>(id, from, _using, with);
 #ifdef PARSER_TRACE
 			std::cout << "render: include " << id;
 			if(!from.empty())
@@ -1316,26 +1316,18 @@ namespace cppcms { namespace templates {
 		}
 		
 
-		filter_t::filter_t(const std::string& value)
+		call_list_t::call_list_t(const std::string& value)
 			: base_t(split_function_call(value).first)
 			, arguments_(split_function_call(value).second) {}
 
-		std::string filter_t::repr() const { 
-			std::string result = value_;
-			if(!arguments_.empty()) {
-				result += "(";
-				for(const ptr& argument : arguments_) {
-					result += argument->repr() + ",";
-				}
-				result[result.length()-1] = ')';
-			}
+		std::string call_list_t::repr() const { 
+			std::string result = value_ + "(";
+			for(const ptr& x : arguments_)
+				result += x->repr() + ",";
+			result[result.length()-1] = ')';
 			return result;
 		}
 			
-		const std::vector<ptr>& filter_t::arguments() const {
-			return arguments_;
-		}
-
 		std::string string_t::unescaped() const {
 			return decode_escaped_string(value_);
 		}
@@ -1347,16 +1339,13 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
-		std::string call_list_t::repr() const {
-			return value_;
-		}
-		
 		param_list_t::param_list_t(const std::string& input)
 			: base_t(trim(input)) {}
 
 		std::string param_list_t::repr() const {
 			return value_;
 		}
+			
 
 		bool name_t::operator<(const name_t& rhs) const {
 			return repr() < rhs.repr();
@@ -1687,42 +1676,35 @@ namespace cppcms { namespace templates {
 		void ngt_t::write(std::ostream& /* o */) {
 		}
 			
-		include_t::include_t(	const std::string& name, const std::string& from, 
-					const std::string& _using, const std::string& with, 
-					const std::vector<std::string>& arguments, base_ptr parent) 
+		include_t::include_t(	const expr::call_list& name, const expr::identifier& from, 
+					const expr::identifier& _using, const expr::variable& with, 
+					base_ptr parent) 
 			: base_t("include", false, parent) 
 			, name_(name)
 			, from_(from)
 			, using_(_using) 
-			, with_(with)
-			, arguments_(arguments) {}
+			, with_(with) {}
 		
 		void include_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "include " << name_;
+			o << p << "include " << *name_;
 
-			if(from_.empty()) {
-				if(!using_.empty()) {
-					o << " using " << using_;
-					if(!with_.empty())
-						o << " with " << with_;
+			if(!from_) {
+				if(using_) {
+					o << " using " << *using_;
+					if(with_)
+						o << " with " << *with_;
 					else
 						o << " with (this content)";
 				} else {
 					o << " from (self)";
 				}
+			} else if(from_) {
+				o << " from " << *from_;
 			} else {
-				o << " from " << from_;
+				o << " from (self)";
 			}
 			o << std::endl;
-			if(arguments_.empty()) {
-				o << p << "\twithout arguments\n";
-			} else {
-				o << p << "\twith arguments (";
-				for(const std::string& arg : arguments_)
-					o << arg << ", ";
-				o << ")\n";
-			}
 		}
 		
 		base_ptr include_t::end(const std::string&) {

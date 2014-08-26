@@ -70,15 +70,6 @@ namespace cppcms { namespace templates {
 			virtual std::string repr() const;
 		};
 		
-		class filter_t : public base_t {
-			typedef std::vector<ptr> arguments_t;
-			arguments_t arguments_;
-		public:
-			filter_t(const std::string& value);
-			virtual std::string repr() const;
-			const std::vector<ptr>& arguments() const;
-		};
-
 		class string_t : public base_t {
 		public:
 			using base_t::base_t;
@@ -100,8 +91,9 @@ namespace cppcms { namespace templates {
 		};
 		
 		class call_list_t : public base_t {
+			const std::vector<ptr> arguments_;
 		public:
-			using base_t::base_t;
+			call_list_t(const std::string& expr); 
 			std::string repr() const;
 		};
 		
@@ -111,6 +103,12 @@ namespace cppcms { namespace templates {
 			using base_t::base_t;
 			std::string repr() const;
 		};
+		
+		class filter_t : public call_list_t {
+		public:
+			using call_list_t::call_list_t;
+		};
+
 
 		std::ostream& operator<<(std::ostream& o, const name_t& obj);
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj);
@@ -287,10 +285,13 @@ namespace cppcms { namespace templates {
 		};
 
 		class include_t : public base_t {
-			const std::string name_, from_, using_, with_;
+			const expr::call_list name_;
+			const expr::identifier from_, using_;
+			const expr::variable with_;
 			const std::vector<std::string> arguments_;
 		public:
-			include_t(const std::string& name, const std::string& from, const std::string& _using, const std::string& with, const std::vector<std::string>& arguments, base_ptr parent);
+			include_t(const expr::call_list& name, const expr::identifier& from, 
+					const expr::identifier& _using, const expr::variable& with, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
