@@ -790,13 +790,30 @@ namespace cppcms { namespace templates {
 				p.raise("expected in VARIABLE %>");
 			}
 
+			// save to tree		
+			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(item_name, as, rowid, variable, reverse);
+			current_ = current_->as<ast::foreach_t>().prefix();
+#ifdef PARSER_TRACE
 			std::cout << "flow: foreach (" << item_name << " in " << variable << "; rowid " << rowid << ", reverse " << reverse << ", as " << as << ", from " << from << "\n";
+#endif
 		} else if(p.reset().try_token_ws("item").try_token("%>")) {
+			// current_ is foreach_t > item_prefix
+			current_ = current_->parent()->as<ast::foreach_t>().item();
+#ifdef PARSER_TRACE
 			std::cout << "flow: item\n";
+#endif
 		} else if(p.reset().try_token_ws("empty").try_token("%>")) {
+			// current_ is foreach_t > something
+			current_ = current_->parent()->as<ast::foreach_t>().empty();
+#ifdef PARSER_TRACE
 			std::cout << "flow: empty\n";
+#endif
 		} else if(p.reset().try_token_ws("separator").try_token("%>")) {
+			// current_ is foreach_t > something
+			current_ = current_->parent()->as<ast::foreach_t>().separator();
+#ifdef PARSER_TRACE
 			std::cout << "flow: separator\n";
+#endif
 		} else if(p.reset().try_token_ws("end")) {
 			std::string what;
 			if(p.try_name_ws()) {
@@ -809,22 +826,31 @@ namespace cppcms { namespace templates {
 			}
 			
 			// action
-			if(what.empty() || current_->sysname() == what) { // FIXME: what.empty() for debugging only
+			if(what.empty() || current_->sysname() == what || 
+				(current_->sysname() == "condition" && what == "if") || 
+				(current_->sysname() == "item_prefix" && what == "foreach") || 
+				(current_->sysname() == "item_suffix" && what == "foreach") || 
+				(current_->sysname() == "item_empty" && what == "foreach") ||
+				(current_->sysname() == "item_separator" && what == "foreach") 
+			) {
 				if(!what.empty() && current_->parent()) {				
-					current_ = current_->parent();
-					if(current_->sysname() == "if") { // prev line backs from "condition" to "if"
-						current_ = current_->parent();  // so i need to back from "if" to its parent
+					std::cout << ">> go back from " << current_->sysname() << " to " << current_->parent()->sysname() << std::endl;
+					if(current_->sysname() == "condition") { // prev line backs from "condition" to "if"
+						current_ = current_->parent()->parent();  // so i need to back from "if" to its parent
+					} else if(current_->sysname() == "item_prefix" || current_->sysname() == "item_suffix" || current_->sysname() == "item_separator" || current_->sysname() == "item_empty") {
+						current_ = current_->parent()->parent(); 
+					} else if(current_->sysname() == "item") {
+						current_ = current_->parent()->as<ast::foreach_t>().suffix();
+					} else {
+						current_ = current_->parent();
 					}
-				} else if(what.empty() && current_->sysname() == "condition") { // FIXME: temporary only
-					current_ = current_->parent()->parent();
 				} else {
-					// as below
-					// p.back(3).raise("unexpected end");
+					p.back(3).raise("unexpected end");
 				}
-			} else {
-				// FIXME
-				// disabled until every block is supported
-//				p.back(3).raise("expected 'end " + current_->sysname() + "'");
+			} else if(current_->sysname() == "root" && what == "skin") {
+				current_ = current_->as<ast::root_t>().end_skin();
+			} else if(what != "cache") { // FIXME: unimplemented
+				p.back(3).raise("expected 'end " + current_->sysname() + "'");
 			}
 #ifdef PARSER_TRACE
 			std::cout << "flow: end " << what << "\n";
@@ -1209,6 +1235,11 @@ namespace cppcms { namespace templates {
 			return shared_from_this();
 		}
 
+		base_ptr root_t::end_skin() {
+			current_skin = skins.end();
+			return shared_from_this();
+		}
+
 		base_ptr root_t::set_mode(const std::string& mode) {
 			mode_ = mode;
 			return shared_from_this();
@@ -1279,6 +1310,16 @@ namespace cppcms { namespace templates {
 			o << p << "}\n";
 		}
 			
+		has_children::has_children(const std::string& sysname, bool block, base_ptr parent) 
+			: base_t(sysname, block, parent) {}
+			
+		void has_children::dump(std::ostream& o, int tabs) {
+			for(const base_ptr& child : children) 
+				child->dump(o, tabs);
+		}
+		
+		void has_children::write(std::ostream& /* o */) {}
+
 		template_t::template_t(const std::string& name, const std::string& arguments, base_ptr parent) 
 			: has_children("template", true, parent)
 	       		, name_(name) 
@@ -1561,6 +1602,98 @@ namespace cppcms { namespace templates {
 		
 		void if_t::condition_t::write(std::ostream& /* o */) {
 		}
+			
+		foreach_t::foreach_t(	const std::string& name, const std::string& as, 
+					const std::string& rowid, const std::string& array, 
+					bool reverse, base_ptr parent) 
+			: base_t("foreach", true, parent) 
+			, name_(name)
+			, as_(as)
+			, rowid_(rowid)
+			, array_(array) 
+			, reverse_(reverse) {}
+			
+		void foreach_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "foreach " << name_;
+			if(!as_.empty())
+				o << " (as " << as_ << ")";
+			if(!rowid_.empty())
+				o << " (and rowid named " << rowid_ << ")";
+			o << " in " << (reverse_ ? "reversed array " : "array ") << array_ << "{\n";
+			if(empty_) {
+				o << p << "\tempty = [\n";
+				empty_->dump(o, tabs+2);
+				o << p << "\t]\n";
+			} else { 
+				o << p << "\tempty not set\n";
+			}
+
+			if(separator_) {
+				o << p << "\tseparator = [\n";
+				separator_->dump(o, tabs+2);
+				o << p << "\t]\n";
+			} else {
+				o << p << "\tseparator not set\n";
+			}
+
+			if(item_) {
+				o << p << "\titem = [\n";
+				item_->dump(o,tabs+2);
+				o << p << "\t]\n";
+			} else {
+				o << p << "\titem not set\n";
+			}
+			
+			if(item_prefix_) {
+				o << p << "\titem prefix = [\n";
+				item_prefix_->dump(o,tabs+2);
+				o << p << "\t]\n";
+			} else {
+				o << p << "\titem prefix not set\n";
+			}
+			
+			if(item_suffix_) {
+				o << p << "\titem suffix = [\n";
+				item_suffix_->dump(o,tabs+2);
+				o << p << "\t]\n";
+			} else {
+				o << p << "\titem suffix not set\n";
+			}
+			o << p << "}\n";
+		}
+		
+		void foreach_t::write(std::ostream& /* o */) {}
+
+		base_ptr foreach_t::prefix() {
+			if(!item_prefix_)
+				item_prefix_ = std::make_shared<has_children>("item_prefix", true, shared_from_this());
+			return item_prefix_;
+		}
+		
+		base_ptr foreach_t::suffix() {
+			if(!item_suffix_)
+				item_suffix_ = std::make_shared<has_children>("item_suffix", true, shared_from_this());
+			return item_suffix_;
+		}
+		
+		base_ptr foreach_t::empty() {
+			if(!empty_)
+				empty_ = std::make_shared<has_children>("item_empty", true, shared_from_this());
+			return empty_;
+		}
+		base_ptr foreach_t::separator() {
+			if(!separator_)
+				separator_ = std::make_shared<has_children>("item_separator", true, shared_from_this());
+			return separator_;
+		}
+		base_ptr foreach_t::item() {
+			if(!item_)
+				item_ = std::make_shared<has_children>("item", true, shared_from_this());
+			return item_;
+		}
+
+
 
 			
 

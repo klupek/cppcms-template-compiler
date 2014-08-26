@@ -30,40 +30,40 @@
   <h1>Hello <%= username %></h1>  
 <% else %>  
   <h1>Hello Visitor</h1>  
-<% end %>  
+<% end if %>  
 <% if ( content.n % 2==0 ) %>  
   <% n %> is odd.  
 <% elif ( content.n % 3 ==0) %>  
   <% n %> can be divided by 3 without reminder.  
-<% end %> 
+<% end if %> 
 <% foreach student in students %>  
   <ul>  
   <% item %>  
      <li><% student.id %>, <% student.name %></li>  
-  <% end %>  
+  <% end item %>  
   </ul>  
 <% empty %>  
   <h2>No students</h2>  
-<% end %> 
+<% end foreach %> 
 
 <% foreach student in students %>  
-<% separator %>, <% item %><% student.name %><% end %>  
-<% end %>  
+<% separator %>, <% item %><% student.name %><% end item %>  
+<% end foreach %>  
 
 <% foreach line rowid num from 1 in code %>  
-<% item %><%= num %>:<%=line%><% end %>  
-<% end %>  
+<% item %><%= num %>:<%=line%><% end item %>  
+<% end foreach %>  
 
 <% foreach student as students_type::iterator in students %>  
-<% end %>
+<% end foreach %>
 
 <% foreach w in form %>  
   <% separator %><br/><% item %>  
-    <% if w.has_message() %><% w.message() %>:<% end %>  
+    <% if w.has_message() %><% w.message() %>:<% end if %>  
     <% form input w %>  
-    <% if not w.valid() %>:<% w.error_message() %><% end %>  
-  <% end %>  
-<% end %> 
+    <% if not w.valid() %>:<% w.error_message() %><% end if %>  
+  <% end item %>  
+<% end foreach %> 
 
 <% end template %>
 <% end view %>
@@ -94,16 +94,16 @@ next2
 <% cache "foo" %>  
     <% cache "ba\"r\"r" %>  
  <% trigger varname %> 
-    <% end %>  
-<% end %>  
+    <% end cache %>  
+<% end cache %>  
 <% cache "foo" %>  
     <% cache "bar" no triggers %>  
-    <% end %>  
-<% end %>  
+    <% end cache %>  
+<% end cache %>  
 <% cache "foo" on miss load_data() %>  
  <% trigger "bar" %> 
 ...  
-<% end %>
+<% end cache %>
 <% end template %>
 <% template vn2_tmpl2() %>
 blah blah 22

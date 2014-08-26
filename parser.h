@@ -39,7 +39,14 @@ namespace cppcms { namespace templates {
 
 			// TODO: verbose errors instead of bad_cast
 			template<typename T>
-			T& as() { return dynamic_cast<T&>(*this); }
+			T& as() { 
+				try {
+					return dynamic_cast<T&>(*this); 
+				} catch(const std::bad_cast&) {
+					std::cerr << "bad dynamic cast from " << typeid(*this).name() << " to " << typeid(T()).name() << std::endl;
+					throw;
+				}
+			}
 
 			virtual void write(std::ostream&) = 0;
 			virtual void dump(std::ostream& o, int tabs = 0) = 0;
@@ -58,6 +65,7 @@ namespace cppcms { namespace templates {
 		public:
 			root_t();
 			base_ptr add_skin(const std::string& name);
+			base_ptr end_skin();
 			base_ptr set_mode(const std::string& mode);
 			base_ptr add_cpp(const std::string& code);
 			base_ptr add_view(const std::string& name, const std::string& data, const std::string& parent);
@@ -81,7 +89,7 @@ namespace cppcms { namespace templates {
 		protected:
 			std::vector<base_ptr> children;
 		public:
-			using base_t::base_t; 
+			has_children(const std::string& sysname, bool block, base_ptr parent);
 
 			template<typename T, typename... Args>
 			base_ptr add(Args&&... args) { 
@@ -96,6 +104,9 @@ namespace cppcms { namespace templates {
 				else
 					return shared_from_this();
 			}
+			
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
 		};
 
 		class template_t : public has_children {
@@ -217,6 +228,22 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 		};
 
+		class foreach_t : public base_t {
+			const std::string name_, as_, rowid_, array_;
+			const bool reverse_;
+			base_ptr empty_, separator_, item_;
+			base_ptr item_prefix_, item_suffix_;
+		public:
+			foreach_t(const std::string& name, const std::string& as, const std::string& rowid, const std::string& array, bool reverse, base_ptr parent);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+
+			base_ptr prefix();
+			base_ptr empty();
+			base_ptr separator();
+			base_ptr item();
+			base_ptr suffix();
+		};
 
 
 
