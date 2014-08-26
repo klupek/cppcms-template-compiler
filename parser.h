@@ -245,6 +245,18 @@ namespace cppcms { namespace templates {
 			base_ptr suffix();
 		};
 
+		class cache_t : public has_children {
+			const std::string name_, miss_;
+			const int duration_;
+			const bool recording_, triggers_;
+			std::vector<std::string> trigger_list_;
+		public:
+			cache_t(const std::string& name, const std::string& miss, int duration, bool recording, bool triggers, base_ptr parent);
+			base_ptr add_trigger(const std::string&);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual void write(std::ostream& o);
+		};
+
 
 
 

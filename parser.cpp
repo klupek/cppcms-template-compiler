@@ -834,7 +834,6 @@ namespace cppcms { namespace templates {
 				(current_->sysname() == "item_separator" && what == "foreach") 
 			) {
 				if(!what.empty() && current_->parent()) {				
-					std::cout << ">> go back from " << current_->sysname() << " to " << current_->parent()->sysname() << std::endl;
 					if(current_->sysname() == "condition") { // prev line backs from "condition" to "if"
 						current_ = current_->parent()->parent();  // so i need to back from "if" to its parent
 					} else if(current_->sysname() == "item_prefix" || current_->sysname() == "item_suffix" || current_->sysname() == "item_separator" || current_->sysname() == "item_empty") {
@@ -895,13 +894,19 @@ namespace cppcms { namespace templates {
 				p.raise("expected %>");
 			}
 
+			current_ = current_->as<ast::has_children>().add<ast::cache_t>(name, miss, _for, !no_recording, !no_triggers);
+#ifdef PARSER_TRACE
 			std::cout << "flow: cache " << name << ", miss = " << miss << ", for " << _for << ", no_triggers = " << no_triggers << ", no_recording = " << no_recording << "\n";
+#endif
 		} else if(p.reset().try_token_ws("trigger")) {
 			if(!p.try_variable() && !p.back(1).try_string()) {
 				p.raise("expected STRING or VARIABLE");
 			} else {
 				const std::string name = p.get(-1);
+				current_ = current_->as<ast::cache_t>().add_trigger(name);
+#ifdef PARSER_TRACE
 				std::cout << "flow: trigger " << name << std::endl;
+#endif
 			}
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %>");
@@ -1692,6 +1697,48 @@ namespace cppcms { namespace templates {
 				item_ = std::make_shared<has_children>("item", true, shared_from_this());
 			return item_;
 		}
+			
+		cache_t::cache_t(	const std::string& name, const std::string& miss, 
+					int duration, bool recording, bool triggers, base_ptr parent) 
+			: has_children("cache", true, parent) 
+			, name_(name)
+			, miss_(miss)
+			, duration_(duration)
+			, recording_(recording)
+			, triggers_(triggers) {}
+			
+		base_ptr cache_t::add_trigger(const std::string& t) {
+			trigger_list_.emplace_back(t);
+			return shared_from_this();
+		}
+		
+		void cache_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "cache " << name_;
+			if(duration_ > -1)
+				o << " (cached for " << duration_ << "s)";
+			if(!miss_.empty())
+				o << " (call " << miss_ << " on miss)";
+			o << " recording is " << (recording_ ? "ON" : "OFF") << 
+				" and triggers are " << (triggers_ ? "ON" : "OFF");
+			if(trigger_list_.empty()) {
+				o << " - no triggers\n";
+			} else { 
+				o << " - triggers [\n";
+				for(const std::string& trigger : trigger_list_)
+					o << p << "\t" << trigger << std::endl;
+				o << p << "]\n";
+			}
+			o << p << "cache children = [\n";
+			for(const base_ptr& child : children) {
+				child->dump(o, tabs+1);
+			}
+			o << p << "]\n";
+		}
+		
+		void cache_t::write(std::ostream& /* o */) {
+		}
+
 
 
 
