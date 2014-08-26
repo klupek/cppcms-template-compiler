@@ -95,6 +95,7 @@ namespace cppcms { namespace templates {
 		
 		class param_list_t : public base_t {
 		public:
+			param_list_t(const std::string&);
 			using base_t::base_t;
 			std::string repr() const;
 		};

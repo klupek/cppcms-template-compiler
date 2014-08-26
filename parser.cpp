@@ -7,7 +7,18 @@ namespace cppcms { namespace templates {
 	static bool is_digit(char c) {
 		return ( c >= '0' && c <= '9' );
 	}
+
+	std::string trim(const std::string& input) {
+		size_t beg = 0, end = input.length();
 		
+		while(beg < input.length() && std::isspace(input[beg]))
+			++beg;
+
+		while(end > beg && std::isspace(input[end-1]))
+			--end;
+		return std::string(&input[beg], &input[end]);
+	}
+
 	static std::string decode_escaped_string(const std::string& input) {
 		std::string result;
 		bool escaped = false;
@@ -1238,6 +1249,9 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
+		param_list_t::param_list_t(const std::string& input)
+			: base_t(trim(input)) {}
+
 		std::string param_list_t::repr() const {
 			return value_;
 		}
