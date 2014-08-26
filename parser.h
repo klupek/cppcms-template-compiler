@@ -308,9 +308,9 @@ namespace cppcms { namespace templates {
 		};
 		
 		class csrf_t : public base_t {
-			const std::string style_;
+			const expr::name style_;
 		public:
-			csrf_t(const std::string& style, base_ptr parent);
+			csrf_t(const expr::name& style, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);

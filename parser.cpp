@@ -1208,9 +1208,9 @@ namespace cppcms { namespace templates {
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 #endif
 		} else if(p.reset().try_token_ws("csrf")) {
-			std::string type;
+			expr::name type;
 			if(p.try_name_ws().try_token("%>")) { // [ csrf, \s+, NAME, \s+, %> ]
-				type = p.get(-3);
+				type = expr::make_name(p.get(-3));
 			} else if(!p.back(3).try_token("%>")) {
 				p.raise("expected csrf style(type) or %>");
 			}
@@ -1732,13 +1732,16 @@ namespace cppcms { namespace templates {
 		void form_t::write(std::ostream& /* o */) {
 		}
 		
-		csrf_t::csrf_t(const std::string& style, base_ptr parent)
+		csrf_t::csrf_t(const expr::name& style, base_ptr parent)
 			: base_t("csrf", false, parent)
 			, style_(style) {}
 		
 		void csrf_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "csrf style = " << (style_.empty() ? "(default)" : style_ ) << std::endl;
+			if(style_)
+				o << p << "csrf style = " << *style_ << "\n";
+			else
+				o << p << "csrf style = (default)\n";
 		}
 		
 		base_ptr csrf_t::end(const std::string&) {
