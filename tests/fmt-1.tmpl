@@ -1,0 +1,12 @@
+<% skin %>
+<% view view_name_1 uses data::data_class_1 %>
+<% template test_template() %>
+<% gt "you have no messages" %>
+<% gt "you have {1} unread message" using messages.count() %>
+<% gt "click <a href=\"{1}\">here</a> to read {2} unread messages" using messages.link | urlencode, messages.count() %>
+<% gt "topic: {1}, {2}" using topic.name | uppercase, topic.created | strftime("%d/%m/%Y") %>
+<% ngt "You have one apple", "You have {1} apples, click <a href=\"{2}\">here</a> to eat them", apple_count using apple_count, apple_link | urlencode %>
+<% pgt "You have {1:apple}, click <a href=\"{2}\">here</a> to eat them" using apple_count, apple_link | urlencode %>
+<% end %>
+<% end %>
+<% end %>

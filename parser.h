@@ -114,6 +114,7 @@ namespace cppcms { namespace templates {
 
 		std::ostream& operator<<(std::ostream& o, const name_t& obj);
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj);
+		std::ostream& operator<<(std::ostream& o, const string_t& obj);
 		std::ostream& operator<<(std::ostream& o, const param_list_t& obj);
 		std::ostream& operator<<(std::ostream& o, const call_list_t& obj);
 		std::ostream& operator<<(std::ostream& o, const filter_t& obj);
@@ -256,27 +257,30 @@ namespace cppcms { namespace templates {
 		};
 			
 		struct using_option_t {
-			const std::string variable;
-			const std::vector<std::string> filters;
+			const expr::variable variable;
+			const std::vector<expr::filter> filters;
 		};
 		typedef std::vector<using_option_t> using_options_t;
 
 		class fmt_function_t : public base_t {
 		protected:
-			const std::string name_, fmt_;
+			const std::string name_;
+		        const expr::string fmt_;
 			const using_options_t using_options_;
 		public:
-			fmt_function_t(const std::string& name, const std::string& fmt, const using_options_t& uos, base_ptr parent);
+			fmt_function_t(const std::string& name, const expr::string& fmt, 
+					const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
 		};
 
 		class ngt_t : public base_t {
-			const std::string singular_, plural_, variable_;
+			const expr::string singular_, plural_;
+			const expr::variable variable_;
 			const using_options_t using_options_;
 		public:
-			ngt_t(const std::string& singular, const std::string& plural, const std::string& variable, const using_options_t& uos, base_ptr parent);
+			ngt_t(const expr::string& singular, const expr::string& plural, const expr::variable& variable, const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
@@ -408,10 +412,11 @@ namespace cppcms { namespace templates {
 		std::vector<state_t> stack_;
 		std::stack<std::pair<size_t,size_t>> state_stack_;
 		// details stack looks like stack or state_stack_, but refactoring it currently would break too many things
+	public:
 		struct detail_t {
 			const std::string what, item;
 		};
-		
+	private:	
 		typedef std::stack<detail_t> details_t;
 		details_t details_;
 
@@ -519,6 +524,8 @@ namespace cppcms { namespace templates {
  * 			note: config should contain word => [ [ range, pluralized ] ], so not only english is supported
  * 	form	
  * 		additional form rendering engines should be registerable, 'form' NAME VARIABLE 
+ * magic to do:
+ * 	collapsing all-whitespace strings in add_html()
  */
 
 #endif

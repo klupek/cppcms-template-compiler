@@ -1047,10 +1047,14 @@ namespace cppcms { namespace templates {
 	}
 		
 	ast::using_options_t template_parser::parse_using_options(std::vector<std::string>& variables) {
+		// variables is array of 'raw', 'unprocesses' strings after 'using'
+		// and result options are processed 
 		if(p.try_token_ws("using")) {
 			while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
 				variables.emplace_back(p.get(-1));
+#ifdef PARSER_TRACE
 				std::cout << "\tvariable " << p.get(-1) << std::endl;
+#endif
 				if(!p.skipws(false).try_token(",")) {
 					p.back(2);
 					break;
@@ -1062,17 +1066,28 @@ namespace cppcms { namespace templates {
 			
 			ast::using_options_t options;
 			std::vector<std::string> filters;
+			// it needs reversed stack, working on not-reversed stack is difficult
+			std::vector<parser::detail_t>  rstack;
 			while(!p.details().empty()) {
-				const auto& op = p.details().top();
-				if(op.what == "complex_variable_name") {
-					options.emplace_back(ast::using_option_t { op.item, std::vector<std::string>(filters.rbegin(), filters.rend()) });
-					filters.clear();
-				} else { // what == complex_variable
-					filters.emplace_back(op.item);
-				}
+				rstack.push_back(p.details().top());
 				p.details().pop();
 			}
-			return ast::using_options_t(options.rbegin(), options.rend());
+			for(auto i = rstack.rbegin(); i != rstack.rend(); ++i) {
+				const auto& op = *i;
+				if(op.what == "complex_variable_name") {
+					std::vector<expr::filter> x;
+					for(auto i = filters.rbegin(); i != filters.rend(); ++i) 
+						x.emplace_back(expr::make_filter(*i));
+
+					options.emplace_back(ast::using_option_t { 
+						expr::make_variable(op.item), x 
+					});
+					filters.clear();
+				} else if(op.what == "complex_variable") {
+					filters.emplace_back(op.item);
+				} // else discard
+			}
+			return ast::using_options_t(options.begin(), options.end());
 		} else {
 			p.back(2);
 			return ast::using_options_t();
@@ -1082,21 +1097,22 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_render_expression() {
 		p.push();
 		if(p.try_token_ws("gt").try_string_ws() || p.back(4).try_token_ws("pgt").try_string_ws()) { // [ gt|pgt, \s+, string, \s+ ]
-			const std::string fmt = p.get(-2);
+			const std::string verb = p.get(-4);
+			const expr::string fmt = expr::make_string(p.get(-2));
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
 
-			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>("gt", fmt, options);
+			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>(verb, fmt, options);
 #ifdef PARSER_TRACE
 			std::cout << "render: gt " << fmt << "\n";
 #endif
 		} else if(p.reset().try_token_ws("ngt").try_string().try_comma().try_string().try_comma().try_variable_ws()) { // [ ngt, \s+, STRING, ',', STRING, ',', VARIABLE, \s+ ]
-			const std::string singular = p.get(-6);
-			const std::string plural = p.get(-4);
-			const std::string variable = p.get(-2);
+			const expr::string singular = expr::make_string(p.get(-6));
+			const expr::string plural = expr::make_string(p.get(-4));
+			const expr::variable variable = expr::make_variable(p.get(-2));
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
@@ -1108,7 +1124,7 @@ namespace cppcms { namespace templates {
 			std::cout << "render: ngt " << singular << "/" << plural << "/" << variable << std::endl;
 #endif
 		} else if(p.reset().try_token_ws("url").try_string_ws()) { // [ url, \s+, STRING, \s+ ]
-			const std::string url = p.get(-2);
+			const expr::string url = expr::make_string(p.get(-2));
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_token("%>")) {
@@ -1382,6 +1398,10 @@ namespace cppcms { namespace templates {
 			return o << "[name:" << obj.repr() << "]";
 		}
 		
+		std::ostream& operator<<(std::ostream& o, const string_t& obj) {
+			return o << "[string:" << obj.repr() << "]";
+		}
+		
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj) {
 			return o << "[id:" << obj.repr() << "]";
 		}
@@ -1594,7 +1614,7 @@ namespace cppcms { namespace templates {
 		}
 			
 		fmt_function_t::fmt_function_t(	const std::string& name, 
-						const std::string& fmt, 
+						const expr::string& fmt, 
 						const using_options_t& uos, 
 						base_ptr parent) 
 			: base_t(name, false, parent)
@@ -1604,17 +1624,17 @@ namespace cppcms { namespace templates {
 		
 		void fmt_function_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "fmt function " << name_ << ": " << fmt_ << std::endl;
+			o << p << "fmt function " << name_ << ": " << fmt_->repr() << std::endl;
 			if(using_options_.empty()) {
 				o << p << "\twithout using\n";
 			} else {
 				o << p << "\twith using options:\n"; 
 				for(const using_option_t& uo : using_options_) {
-					o << p << "\t\t" << uo.variable;
+					o << p << "\t\t" << *uo.variable;
 					if(!uo.filters.empty()) {
 						o << " with filters ";
-						for(const std::string& filter : uo.filters)  {
-							o << " | " << filter;
+						for(const expr::filter& filter : uo.filters)  {
+							o << " | " << *filter;
 						}
 					}
 					o << std::endl;
@@ -1629,9 +1649,9 @@ namespace cppcms { namespace templates {
 		void fmt_function_t::write(std::ostream& /* o */) {
 		}
 		
-		ngt_t::ngt_t( 	const std::string& singular, 
-				const std::string& plural,
-				const std::string& variable,
+		ngt_t::ngt_t( 	const expr::string& singular, 
+				const expr::string& plural,
+				const expr::variable& variable,
 				const using_options_t& uos, 
 				base_ptr parent)
 			: base_t("ngt", false, parent)
@@ -1642,17 +1662,17 @@ namespace cppcms { namespace templates {
 		
 		void ngt_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "fmt function ngt: " << singular_ << "/" << plural_ << " with variable " << variable_ <<  std::endl;
+			o << p << "fmt function ngt: " << *singular_ << "/" << *plural_ << " with variable " << *variable_ <<  std::endl;
 			if(using_options_.empty()) {
 				o << p << "\twithout using\n";
 			} else {
 				o << p << "\twith using options:\n"; 
 				for(const using_option_t& uo : using_options_) {
-					o << p << "\t\t" << uo.variable;
+					o << p << "\t\t" << *uo.variable;
 					if(!uo.filters.empty()) {
 						o << " with filters ";
-						for(const std::string& filter : uo.filters)  {
-							o << " | " << filter;
+						for(const expr::filter& filter : uo.filters)  {
+							o << " | " << *filter;
 						}
 					}
 					o << std::endl;
