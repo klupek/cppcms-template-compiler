@@ -775,7 +775,8 @@ namespace cppcms { namespace templates {
 		// ( 'if' | 'elif' ) [ 'not' ] [ 'empty' ] ( VARIABLE | 'rtl' )  
 		if(p.try_token_ws("if") || p.back(2).try_token_ws("elif")) {
 			const std::string verb = p.get(-2);
-			std::string cond, variable;
+			expr::cpp cond;
+			expr::variable variable;
 			ast::if_t::type_t type = ast::if_t::if_regular;
 			bool negate = false;
 			if(p.try_token_ws("not")) {
@@ -784,13 +785,13 @@ namespace cppcms { namespace templates {
 				p.back(2);
 			}
 			if(p.try_token_ws("empty").try_variable_ws()) { // [ empty, \s+, VARIABLE, \s+ ]				
-				variable = p.get(-2);
+				variable = expr::make_variable(p.get(-2));
 				type = ast::if_t::type_t::if_empty;
 			} else if(p.back(4).try_variable_ws()) { // [ VAR, \s+ ]
-				variable = p.get(-2);
+				variable = expr::make_variable(p.get(-2));
 				type = ast::if_t::type_t::if_regular;
 			} else if(p.back(2).try_token("(") && p.back(1).try_parenthesis_expression().skipws(false)) { // [ (, \s*, expr, \s* ]
-				cond = p.get(-2);
+				cond = expr::make_cpp(p.get(-2));
 				type = ast::if_t::if_cpp;
 			} else {
 				p.raise("expected [not] [empty] ([variable]|rtl) or ( c++ expr )");
@@ -814,7 +815,7 @@ namespace cppcms { namespace templates {
 				
 			if(type == ast::if_t::type_t::if_cpp) {
 				current_ = current_->as<ast::if_t>().add_condition(cond, negate);				
-			} else if(type == ast::if_t::type_t::if_regular && variable == "rtl") {
+			} else if(type == ast::if_t::type_t::if_regular && variable->repr() == "rtl") {
 				current_ = current_->as<ast::if_t>().add_condition(ast::if_t::type_t::if_rtl, negate);
 			} else {
 				current_ = current_->as<ast::if_t>().add_condition(type, variable, negate);
@@ -1327,6 +1328,10 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
+		std::string cpp_t::repr() const { 
+			return value_;
+		}
+		
 
 		call_list_t::call_list_t(const std::string& value)
 			: base_t(split_function_call(value).first)
@@ -1383,6 +1388,10 @@ namespace cppcms { namespace templates {
 			return std::make_shared<name_t>(repr);
 		}
 		
+		cpp make_cpp(const std::string& repr) {
+			return std::make_shared<cpp_t>(repr);
+		}
+		
 		identifier make_identifier(const std::string& repr) {
 			return std::make_shared<identifier_t>(repr);
 		}
@@ -1421,6 +1430,10 @@ namespace cppcms { namespace templates {
 		
 		std::ostream& operator<<(std::ostream& o, const variable_t& obj) {
 			return o << "[variable:" << obj.repr() << "]";
+		}
+		
+		std::ostream& operator<<(std::ostream& o, const cpp_t& obj) {
+			return o << "[cpp:" << obj.repr() << "]";
 		}
 		
 		std::ostream& operator<<(std::ostream& o, const base_t& obj) {
@@ -1837,7 +1850,7 @@ namespace cppcms { namespace templates {
 		}
 				
 		
-		if_t::condition_t::condition_t(type_t type, const std::string& cond, const std::string& variable, bool negate, base_ptr parent)
+		if_t::condition_t::condition_t(type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent)
 			: has_children("condition", true, parent)
 			, type_(type)
 			, cond_(cond)
@@ -1849,21 +1862,21 @@ namespace cppcms { namespace templates {
 
 		base_ptr if_t::add_condition(type_t type, bool negate) {
 			conditions_.emplace_back(
-				std::make_shared<condition_t>(type, std::string(), std::string(), negate, shared_from_this())
+				std::make_shared<condition_t>(type, expr::cpp(), expr::variable(), negate, shared_from_this())
 			);
 			return conditions_.back();
 		}
 			
-		base_ptr if_t::add_condition(const type_t& type, const std::string& variable, bool negate) {
+		base_ptr if_t::add_condition(const type_t& type, const expr::variable& variable, bool negate) {
 			conditions_.emplace_back(
-				std::make_shared<condition_t>(type, std::string(), variable, negate, shared_from_this())
+				std::make_shared<condition_t>(type, expr::cpp(), variable, negate, shared_from_this())
 			);
 			return conditions_.back();
 		}
 			
-		base_ptr if_t::add_condition(const std::string& cond, bool negate) {
+		base_ptr if_t::add_condition(const expr::cpp& cond, bool negate) {
 			conditions_.emplace_back(
-				std::make_shared<condition_t>(type_t::if_cpp, cond, std::string(), negate, shared_from_this())
+				std::make_shared<condition_t>(type_t::if_cpp, cond, expr::variable(), negate, shared_from_this())
 			);
 			return conditions_.back();
 		}
@@ -1888,19 +1901,19 @@ namespace cppcms { namespace templates {
 			const std::string neg = (negate_ ? "not " : "");
 			switch(type_) {
 				case if_regular:
-					o << p << "if " << neg << "true: " << variable_;
+					o << p << "if " << neg << "true: " << *variable_;
 					break;
 				case if_empty:
-					o << p << "if " << neg << "empty: " << variable_;
+					o << p << "if " << neg << "empty: " << *variable_;
 					break;
 				case if_rtl:
 					o << p << "if " << neg << "rtl";
 					break;
 				case if_cpp:
-					o << p << "if " << neg << "cpp: " << cond_;
+					o << p << "if " << neg << "cpp: " << *cond_;
 					break;
 				case if_else:
-					o << p << "if else: " << variable_;
+					o << p << "if else: ";
 					break;
 			}
 			o << " [\n";

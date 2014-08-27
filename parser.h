@@ -20,6 +20,7 @@ namespace cppcms { namespace templates {
 		class identifier_t;
 		class call_list_t;
 		class param_list_t;
+		class cpp_t;
 
 		typedef std::shared_ptr<base_t> ptr;
 		typedef std::shared_ptr<number_t> number;
@@ -30,6 +31,7 @@ namespace cppcms { namespace templates {
 		typedef std::shared_ptr<identifier_t> identifier;
 		typedef std::shared_ptr<call_list_t> call_list;
 		typedef std::shared_ptr<param_list_t> param_list;
+		typedef std::shared_ptr<cpp_t> cpp;
 
 		number make_number(const std::string& repr);
 		variable make_variable(const std::string& repr);
@@ -39,6 +41,7 @@ namespace cppcms { namespace templates {
 		identifier make_identifier(const std::string& repr);
 		call_list make_call_list(const std::string& repr);
 		param_list make_param_list(const std::string& repr);
+		cpp make_cpp(const std::string& repr);
 		
 		class base_t {
 		protected:
@@ -112,6 +115,12 @@ namespace cppcms { namespace templates {
 			using call_list_t::call_list_t;
 		};
 
+		class cpp_t : public base_t { 
+		public:
+			using base_t::base_t;
+			std::string repr() const;
+		};
+
 
 		std::ostream& operator<<(std::ostream& o, const name_t& obj);
 		std::ostream& operator<<(std::ostream& o, const identifier_t& obj);
@@ -120,6 +129,7 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const call_list_t& obj);
 		std::ostream& operator<<(std::ostream& o, const filter_t& obj);
 		std::ostream& operator<<(std::ostream& o, const variable_t& obj);
+		std::ostream& operator<<(std::ostream& o, const cpp_t& obj);
 		std::ostream& operator<<(std::ostream& o, const base_t& obj);		
 	}
 
@@ -347,10 +357,11 @@ namespace cppcms { namespace templates {
 		private:
 			class condition_t : public has_children {
 				const type_t type_;
-				const std::string cond_, variable_;
+				const expr::cpp cond_;
+				const expr::variable variable_;
 				const bool negate_;
 			public:
-				condition_t(type_t type, const std::string& cond, const std::string& variable, bool negate, base_ptr parent);
+				condition_t(type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent);
 				virtual void dump(std::ostream& o, int tabs = 0);
 				virtual void write(std::ostream& o);
 				virtual base_ptr end(const std::string& what);
@@ -361,8 +372,8 @@ namespace cppcms { namespace templates {
 			if_t(base_ptr parent);
 			
 			base_ptr add_condition(type_t type, bool negate);
-			base_ptr add_condition(const type_t& type, const std::string& variable, bool negate);
-			base_ptr add_condition(const std::string& cond, bool negate);
+			base_ptr add_condition(const type_t& type, const expr::variable& variable, bool negate);
+			base_ptr add_condition(const expr::cpp& cond, bool negate);
 			
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
