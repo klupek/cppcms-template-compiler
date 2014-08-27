@@ -468,12 +468,13 @@ namespace cppcms { namespace templates {
 		parser_source(const std::string& input);
 		void reset(size_t index, size_t line);
 
-		void move(size_t index_offset); // index_ += index_offset
+		void move(int offset); // index_ += index_offset
 		void move_to(size_t pos); // index_ = pos;
 		bool has_next() const; // index_ < length
 		char current() const;
 		char next(); // index_++; return input_[index_];
 		size_t index() const;
+		size_t line() const;
 		std::string substr(size_t beg, size_t len) const;
 		bool compare_head(const std::string& other) const; // as below && [index_, index_+other.length()] == other
 		bool compare(size_t beg, const std::string& other) const; // .length() - index_ >= token.length() && compare

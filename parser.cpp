@@ -240,14 +240,29 @@ namespace cppcms { namespace templates {
 		return input_[index_];
 	}
 
-	void parser_source::move(size_t offset) {
-		// TODO: bounds
-		// TODO: line numbers
+	void parser_source::move(int offset) {
+		if(offset + index_ > input_.length())
+			throw std::logic_error("move(): offset too big");
+		else if(offset + static_cast<int>(index_) < 0)
+			throw std::logic_error("move(): offset too small");
+		
+		if(offset > 0) {
+			for(size_t i = index_; i < index_+offset; ++i) {
+				if(input_[i] == '\n')
+					line_++;
+			}
+		} else {
+			for(size_t i = index_+offset; i < index_; ++i) {
+				if(input_[i] == '\n')
+					line_--;
+			}
+		}
 		index_ += offset;
 	}
 
 	void parser_source::move_to(size_t pos) {
-		index_ = pos;
+		int offset = pos - index_;
+		move(offset);
 	}
 
 	std::string parser_source::right_context(size_t length) const {
@@ -274,6 +289,10 @@ namespace cppcms { namespace templates {
 
 	size_t parser_source::index() const { 
 		return index_; 
+	}
+
+	size_t parser_source::line() const {
+		return line_;
 	}
 
 	parser::parser(const std::string& input)
