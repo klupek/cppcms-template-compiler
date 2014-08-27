@@ -198,21 +198,98 @@ namespace cppcms { namespace templates {
 		}
 	}
 
-	parser::parser(const std::string& input)
+	parser_source::parser_source(const std::string& input)
 		: input_(input)
-		, index_(0)
+       		, index_(0)
+		, line_(1) {}
+
+	void parser_source::reset(size_t index, size_t line) {
+		line_ = line;
+		index_ = index;
+	}
+
+	std::string parser_source::left_context_from(size_t beg) const { 		
+		return slice(beg, index_); 
+	}
+	
+	std::string parser_source::right_context_to(size_t end) const { 		
+		return slice(index_, end); 
+	}
+
+	std::string parser_source::slice(size_t beg, size_t end) const { 
+		return input_.substr(beg, (end < input_.length() ? end-beg : input_.length()-beg)); 
+	}
+
+	size_t parser_source::length() const { 
+		return input_.length(); 
+	}
+
+	bool parser_source::compare(size_t beg, const std::string& other) const {
+		return (beg + other.length() <= input_.length() 
+				&& input_.compare(beg, other.length(), other) == 0);
+	}
+
+	bool parser_source::compare_head(const std::string& other) const { return compare(index_, other); }
+	std::string parser_source::substr(size_t beg, size_t len) const { return input_.substr(beg, len); }
+	char parser_source::next() {
+		move(1);
+		return current();
+	}
+
+	char parser_source::current() const { 
+		return input_[index_];
+	}
+
+	void parser_source::move(size_t offset) {
+		// TODO: bounds
+		// TODO: line numbers
+		index_ += offset;
+	}
+
+	void parser_source::move_to(size_t pos) {
+		index_ = pos;
+	}
+
+	std::string parser_source::right_context(size_t length) const {
+		length = std::min(length, input_.length()-index_);
+		return input_.substr(index_, length);
+	}
+
+	std::string parser_source::left_context(size_t length) const {
+		length = std::min(index_, length);
+		return input_.substr(index_-length, length);
+	}
+
+	std::string parser_source::right_until_end() const {
+		return input_.substr(index_);
+	}
+
+	size_t parser_source::find_on_right(const std::string& what) const {
+		return input_.find(what, index_);
+	}
+
+	bool parser_source::has_next() const {
+		return index_ < input_.length();
+	}
+
+	size_t parser_source::index() const { 
+		return index_; 
+	}
+
+	parser::parser(const std::string& input)
+		: source_(input)
        		, failed_(0) {}
 	
 	parser& parser::try_token(const std::string& token) {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find token '" << token << "' at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find token '" << token << "' at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && input_.length()-index_ >= token.length() && input_.compare(index_, token.length(), token) == 0) {
-			stack_.emplace_back(state_t { index_, token });
+		if(!failed_ && source_.compare_head(token)) {
+			stack_.emplace_back(state_t { source_.index(), token });
 #ifdef PARSER_DEBUG
 			std::cout << ">>> token " << stack_.back().token << std::endl;
 #endif
-			index_ += token.length();
+			source_.move(token.length());
 		} else {
 			failed_ ++;
 		}
@@ -222,14 +299,14 @@ namespace cppcms { namespace templates {
 	/* NAME is a sequence of Latin letters, digits and underscore starting with a letter. They represent identifiers and can be defined by regular expression such as: [a-zA-Z][a-zA-Z0-9_]* */
 	parser& parser::try_name() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find name at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find name at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
-			size_t start = index_;
-			if(is_latin_letter(input_[index_]) || input_[index_] == '_') {
-				index_++;
-				for(;index_ < input_.length() && ( is_latin_letter(input_[index_]) || is_digit(input_[index_]) || input_[index_] == '_'); ++index_);
-				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_]) });
+		if(!failed_ && source_.has_next()) {
+			size_t start = source_.index();
+			char c = source_.current();
+			if(is_latin_letter(c) || c == '_') {
+				for(;source_.has_next() && ( is_latin_letter(c) || is_digit(c) || c == '_'); c = source_.next());
+				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> name " << stack_.back().token << std::endl;
 #endif
@@ -244,32 +321,33 @@ namespace cppcms { namespace templates {
 
 	parser& parser::try_string() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find string at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find string at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
-			size_t start = index_;
-			if(input_[index_] == '"') {
+		if(!failed_ && source_.has_next()) {
+			size_t start = source_.index();
+			char c = source_.current();
+			if(c == '"') {
 				bool escaped = false;
-				++index_;
-				for(; index_ < input_.length() && (input_[index_] != '"' || escaped); ++index_) {
+				c = source_.next();
+				for(; source_.has_next() && (c != '"' || escaped); c = source_.next()) {
 					if(escaped)
 						escaped = false;
-					else if(input_[index_] == '\\') 
+					else if(c == '\\') 
 						escaped = true;
 				}
-				if(index_ == input_.length()) { // '"' was not found
-					index_ = start;
+				if(!source_.has_next()) { // '"' was not found
+					source_.move_to(start);
 					raise("expected \", found EOF instead");
 				} else {
-					stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_+1]) }); // FIXME: decode?
+					source_.next();
+					stack_.emplace_back(state_t { start, source_.left_context_from(start) }); 
 #ifdef PARSER_DEBUG
 					std::cout << ">>> string " << stack_.back().token << std::endl;
 #endif
-					index_++; // move to next character, past '"'
 				}
 			} else {
 #ifdef PARSER_DEBUG
-				std::cout << ">>> string failed at " << index_ << std::endl;
+				std::cout << ">>> string failed at " << source_.index() << std::endl;
 #endif
 				failed_++;
 			}
@@ -282,19 +360,21 @@ namespace cppcms { namespace templates {
 	// NUMBER is a number -- sequence of digits that may start with - and include .. It can be defined by the regular expression: \-?\d+(\.\d*)?
 	parser& parser::try_number() {		
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find number at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find number at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
-			size_t start = index_;
-			if(input_[index_] == '-' || input_[index_] == '+')
-				index_++;
-			if(input_[index_] >= '0' && input_[index_] <= '9') {
+		if(!failed_ && source_.has_next()) {
+			size_t start = source_.index();
+			char c = source_.current();
+
+			if(c == '-' || c == '+')
+				c = source_.next();
+			if(c >= '0' && c <= '9') {
 				bool dot = false;
-				for(; (input_[index_] >= '0' && input_[index_] <= '9') || (!dot && input_[index_] == '.'); ++index_) {
-					if(input_[index_] == '.')
+				for(; (c >= '0' && c <= '9') || (!dot && c == '.'); c = source_.next()) {
+					if(c == '.')
 						dot = true;
 				}
-				stack_.emplace_back(state_t{ start, std::string(&input_[start], &input_[index_]) });				
+				stack_.emplace_back(state_t{ start, source_.left_context_from(start) });				
 #ifdef PARSER_DEBUG
 				std::cout << ">>> string " << stack_.back().token << std::endl;
 #endif
@@ -311,41 +391,41 @@ namespace cppcms { namespace templates {
 	// identification of function call result. No blanks are allowed. For example: data->point.x, something.else() *foo.bar.	
 	parser& parser::try_variable() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find var at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find var at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
+		if(!failed_ && source_.has_next()) {
 			auto stack_copy = stack_;
-			size_t start = index_, end = index_;
-
+			size_t start = source_.index(), end = source_.index();
+			char c = source_.current();
 			// parse *name((\.|->)name)
-			if(input_[index_] == '*')
-				index_++;
+			if(c == '*')
+				c = source_.next();
 			while(try_name()) {
-				const size_t right = input_.length() - index_;
-				end = index_;
-				if(right >= 1 && input_[index_] == '.') {
-					index_ ++;
-				} else if(right >= 2 && input_[index_] == '-' && input_[index_+1] == '>') {
-					index_ += 2;
+				end = source_.index();
+				if(try_token(".")) {
+					end = source_.index();
+				} else if(back(1).try_token("->")) {
+					end = source_.index();
 				} else {
 					break;
 				}
 			}
-			back(1); // remove 
+			back(1); // remove either last failed try_name() or last failed try_token("->")
 			
 			std::swap(stack_, stack_copy);
 			
 			if(end != start) {
-				const size_t right = input_.length() - end;
-				
-				// parse () at the end
-				if(right >= 2 && input_[end] == '(' && input_[end+1] == ')') 
-					end += 2;
-				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+				if(try_token("()")) {
+					end = source_.index();
+					back(1); // remove from stack
+					source_.move_to(end);
+				} else {
+					back(1);
+				}
+				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> var " << stack_.back().token << std::endl;
 #endif
-				index_ = end;
 			} else {
 				failed_ ++;
 			}
@@ -358,28 +438,28 @@ namespace cppcms { namespace templates {
 
 	parser& parser::try_complex_variable() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find cvar at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find cvar at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
+		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = index_, end = index_;
+			size_t start = source_.index(), end = source_.index();
 			if(try_variable()) {
 				const std::string var = get(-1);
-				end = index_;
+				end = source_.index();
 				while(skipws(false).try_token("|").skipws(false).try_filter()) { 
-					end = index_;
+					end = source_.index();
 					details_.emplace(detail_t { "complex_variable", get(-1) });
 				}
 				
 				back(4);
 				pop();
 				
-				stack_.emplace_back(state_t {start, std::string(&input_[start], &input_[end]) });				
+				stack_.emplace_back(state_t {start, source_.slice(start, end) });				
 				details_.emplace(detail_t { "complex_variable_name", var });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> complex " << stack_.back().token << std::endl;
 #endif
-				index_  = end;
+				source_.move_to(end);
 			} 
 		} else {
 			failed_++;
@@ -390,43 +470,36 @@ namespace cppcms { namespace templates {
 	// IDENTIFIER is a sequence of NAME separated by the symbol ::. No blanks are allowed. For example: data::page
 	parser& parser::try_identifier() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find id at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find id at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
+		if(!failed_ && source_.has_next()) {
 			auto stack_copy = stack_;
-			push();
-			size_t start = index_, end = index_;
+			size_t start = source_.index();
 
 			while(try_name()) {
-				const size_t right = input_.length() - index_;
-				end = index_;
-				if(right >= 2 && input_[index_] == ':' && input_[index_+1] == ':') {
-					index_ += 2;
-				} else {
-					reset();
+				if(!try_token("::")) {
 					break;
 				}
 			}
+			back(1); // failed try_name() OR failed token
+
 			std::swap(stack_, stack_copy);
-			if(end != start) {
-				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+			if(source_.index() != start) {
+				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> id " << stack_.back().token << std::endl;
 #endif
-				index_ = end;
 			} else {
 				failed_++;
 			}
-
-			pop();
 		} else {
 			failed_++;
 		}
 		return *this;
 	}
 	parser& parser::try_argument_list() {
-		if(!failed_ && index_ < input_.length()) {			
-			size_t start = index_, end = index_;
+		if(!failed_ && source_.has_next()) {			
+			size_t start = source_.index();
 			auto stack_copy = stack_;
 			if(try_token("(")) {
 				if(!skipws(false).try_token(")")) {
@@ -454,9 +527,8 @@ namespace cppcms { namespace templates {
 			} else {
 				back(1);
 			}
-			end = index_;
 			std::swap(stack_, stack_copy);
-			stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
+			stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 		} else {
 			failed_++;
 		}
@@ -466,18 +538,17 @@ namespace cppcms { namespace templates {
 	// [ 'ext' ] NAME [ '(' ( VARIABLE | STRING | NUMBER ) [ ',' ( VARIABLE | STRING | NUMBER ) ] ... ]
 	parser& parser::try_filter() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find filter at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find filter at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length()) {
-			size_t start = index_;
-			if(try_token_ws("ext")) {
-			} else {
+		if(!failed_ && source_.has_next()) {
+			size_t start = source_.index();
+			if(!try_token_ws("ext")) {
 				back(2);
 			}
 			if(try_name()) {
 				try_argument_list();
 				stack_.pop_back();
-				stack_.emplace_back(state_t { start, std::string(&input_[start],&input_[index_]) });
+				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> filter " << stack_.back().token << std::endl;
 #endif
@@ -521,14 +592,14 @@ namespace cppcms { namespace templates {
 	}
 
 	parser& parser::skip_to(const std::string& token) {
-		if(!failed_ && index_ < input_.length()) {
-			size_t r = input_.find(token, index_);
+		if(!failed_ && source_.has_next()) {
+			size_t r = source_.find_on_right(token);
 			if(r == std::string::npos) {
 				failed_ +=2;
 			} else {
-				stack_.emplace_back(state_t { index_, input_.substr(index_, r - index_) } );
+				stack_.emplace_back(state_t { source_.index(), source_.right_context_to(r) } );
 				stack_.emplace_back(state_t { r, token });
-				index_ = r + token.length();
+				source_.move_to(r + token.length());
 			}
 		} else {
 			failed_+=2;
@@ -537,14 +608,14 @@ namespace cppcms { namespace templates {
 	}
 
 	parser& parser::skipws(bool require) {
-		if(!failed_ && index_ < input_.length()) {
-			const size_t start = index_;
-			for(;index_ < input_.length() && std::isspace(input_[index_]); ++index_);
-			stack_.emplace_back( state_t { start, input_.substr(start, index_ - start) });
+		if(!failed_ && source_.has_next()) {
+			const size_t start = source_.index();
+			for(;source_.has_next() && std::isspace(source_.current()); source_.move(1));
+			stack_.emplace_back( state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
-			std::cout << ">>> skipws from " << start << " to " << index_ << std::endl;
+			std::cout << ">>> skipws from " << start << " to " << source_.index() << std::endl;
 #endif
-			if(require && index_ == start)
+			if(require && source_.index() == start)
 				failed_++;
 		} else {
 			failed_ ++;
@@ -553,8 +624,8 @@ namespace cppcms { namespace templates {
 	}
 
 	parser& parser::try_comma() {
-		if(!failed_) {
-			size_t start = index_;
+		if(!failed_ && source_.has_next()) {
+			size_t start = source_.index();
 			skipws(false);
 			try_token(",");
 			skipws(false);
@@ -562,10 +633,10 @@ namespace cppcms { namespace templates {
 				back(3);
 				failed_++;
 			} else {
-				size_t end = index_;
+				size_t end = source_.index();
 				back(3);
-				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[end]) });
-				index_ = end;
+				stack_.emplace_back(state_t { start, source_.slice(start, end) });
+				source_.move_to(end);
 			}
 		} else {
 			failed_++;
@@ -582,16 +653,16 @@ namespace cppcms { namespace templates {
 	parser& parser::try_token_nl(const std::string& token) {
 		try_token(token);
 		if(!failed_) {
-			if(index_ < input_.length() && input_[index_] == '\n')
-				index_++;
+			if(source_.has_next() && source_.current() == '\n')
+				source_.next();
 		}
 		return *this;
 	}
 
 	parser& parser::skip_to_end() {
 		if(!failed_) {
-			stack_.emplace_back( state_t { index_, input_.substr(index_) });
-			index_ = input_.length();
+			stack_.emplace_back( state_t { source_.index(), source_.right_until_end() });
+			source_.move_to(source_.length());
 		} else {
 			failed_++;
 		}
@@ -600,15 +671,14 @@ namespace cppcms { namespace templates {
 
 	parser& parser::try_parenthesis_expression() {
 #ifdef PARSER_DEBUG
-		std::cout << ">>>(" << failed_ << ") find parenthesis expression at '" << input_.substr(index_, 20) << "'\n";
+		std::cout << ">>>(" << failed_ << ") find parenthesis expression at '" << source_.right_context(20) << "'\n";
 #endif
-		if(!failed_ && index_ < input_.length() && input_[index_] == '(') {
-			size_t start = index_;
+		if(!failed_ && source_.has_next() && source_.current() == '(') {
+			size_t start = source_.index();
 			int bracket_count = 1;
 			bool escaped = false, string = false, string2 = false;
-			++index_;
-			for(; index_ < input_.length() && bracket_count > 0; ++index_) {
-				const char c = input_[index_];
+			source_.next();
+			for(char c = source_.current(); source_.has_next() && bracket_count > 0; c = source_.next()) {
 				if(!string && !string2 && c == '(')
 					bracket_count++;
 				else if(!string && !string2 && c == ')')
@@ -633,9 +703,9 @@ namespace cppcms { namespace templates {
 
 			}
 			if(bracket_count == 0) {
-				stack_.emplace_back(state_t { start, std::string(&input_[start], &input_[index_]) });
+				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 			} else {
-				index_ = start;
+				source_.move_to(start);
 				failed_++;
 			}
 		} else {
@@ -647,9 +717,9 @@ namespace cppcms { namespace templates {
 
 	void parser::raise(const std::string& msg) {
 		const int context = 70;
-		const std::string left = ( index_ >= context ? input_.substr(index_ - context, context) : input_.substr(0, index_) );
-		const std::string right = ( index_ + context < input_.size() ? input_.substr(index_, context) : input_.substr(index_) );
-		throw std::runtime_error("Parse error at position " + boost::lexical_cast<std::string>(index_) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
+		const std::string left = source_.left_context(context);
+		const std::string right = source_.right_context(context);
+		throw std::runtime_error("Parse error at position " + boost::lexical_cast<std::string>(source_.index()) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
 	}
 
 	bool parser::failed() const {
@@ -661,12 +731,15 @@ namespace cppcms { namespace templates {
 	}
 
 	bool parser::finished() const {
-		return ( stack_.empty() || stack_.back().index == index_ ) && index_ == input_.length(); 
+		return ( stack_.empty() || stack_.back().index == source_.index() ) && !source_.has_next(); 
 	}
 
 	parser::details_t& parser::details() { return details_; }
 	
 	parser& parser::back(size_t n) {
+#ifdef PARSER_DEBUG
+		std::cout << "back for " << n << " levels, " << failed_ << " failed, stack size is " << stack_.size() << std::endl;
+#endif
 		if(n > failed_ + stack_.size())
 			throw std::logic_error("Attempt to clear more tokens then stack_.size()+failed_");
 
@@ -675,7 +748,7 @@ namespace cppcms { namespace templates {
 			failed_ = 0;
 		
 			while(n-- > 0) {
-				index_ = stack_.back().index;
+				source_.move_to(stack_.back().index);
 				stack_.pop_back();
 			}
 		} else {
@@ -686,7 +759,7 @@ namespace cppcms { namespace templates {
 
 
 	void parser::push() {
-		state_stack_.push({index_,failed_});
+		state_stack_.push({source_.index(),failed_});
 	}
 
 	void parser::pop() {
@@ -698,7 +771,7 @@ namespace cppcms { namespace templates {
 	parser& parser::reset() {
 		if(state_stack_.empty())
 			throw std::logic_error("Attempt to reset with empty state stack");
-		index_ = state_stack_.top().first;
+		source_.move_to(state_stack_.top().first);
 		failed_ = state_stack_.top().second;
 
 		return *this;

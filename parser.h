@@ -461,10 +461,50 @@ namespace cppcms { namespace templates {
 
 	}
 
+	class parser_source {
+		const std::string input_;
+		size_t index_, line_;
+	public:
+		parser_source(const std::string& input);
+		void reset(size_t index, size_t line);
+
+		void move(size_t index_offset); // index_ += index_offset
+		void move_to(size_t pos); // index_ = pos;
+		bool has_next() const; // index_ < length
+		char current() const;
+		char next(); // index_++; return input_[index_];
+		size_t index() const;
+		std::string substr(size_t beg, size_t len) const;
+		bool compare_head(const std::string& other) const; // as below && [index_, index_+other.length()] == other
+		bool compare(size_t beg, const std::string& other) const; // .length() - index_ >= token.length() && compare
+		size_t length() const;
+		std::string slice(size_t beg, size_t end) const; // [beg...end-1]
+
+		// get substring, all characters, starting from current index_
+		std::string right_until_end() const; // slice(index_, length())
+
+		// find first token on the right side of current index_ (including current character)
+		size_t find_on_right(const std::string& token) const;
+
+
+		// get up to n chars right from current, including current
+		std::string right_context(size_t length) const;
+
+		// get up to n chars left from current, without current
+		std::string left_context(size_t length) const;
+		
+		// get up to n chars right from current, including current
+		std::string right_context_to(size_t end) const;
+
+		// get up to n chars left from current, without current
+		std::string left_context_from(size_t beg) const;
+	};
+
 	class parser {
-		std::string input_;
+		parser_source source_;
 		struct state_t {
 			size_t index;
+//			size_t line;
 			std::string token;
 		};
 
@@ -479,7 +519,6 @@ namespace cppcms { namespace templates {
 		typedef std::stack<detail_t> details_t;
 		details_t details_;
 
-		size_t index_;
 		size_t failed_;
 	public:
 		explicit parser(const std::string& input);
