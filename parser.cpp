@@ -832,18 +832,20 @@ namespace cppcms { namespace templates {
 #endif
 		// 'foreach' NAME ['as' IDENTIFIER ] [ 'rowid' IDENTIFIER [ 'from' NUMBER ] ] [ 'reverse' ] 'in' VARIABLE
 		} else if(p.reset().try_token_ws("foreach").try_name_ws()) {
-			const std::string item_name = p.get(-2);
-			std::string as("(default)"), rowid("(none)"), variable;
+			const expr::name item_name = expr::make_name(p.get(-2));
+			expr::identifier as;
+			expr::name rowid;
+			expr::variable variable;
 			bool reverse = false;
 			int from = 0;
 
 			if(p.try_token_ws("as").try_identifier_ws()) {
-				as = p.get(-2);
+				as = expr::make_identifier(p.get(-2));
 			} else {
 				p.back(4);
 			}
 			if(p.try_token_ws("rowid").try_name_ws()) { // docs say IDENTIFIER, but local variable should be NAME
-				rowid = p.get(-2);
+				rowid = expr::make_name(p.get(-2));
 			} else {
 				p.back(4);
 			}
@@ -861,13 +863,13 @@ namespace cppcms { namespace templates {
 			}
 
 			if(p.try_token_ws("in").try_variable_ws().try_token("%>")) {
-				variable = p.get(-3);
+				variable = expr::make_variable(p.get(-3));
 			} else {
 				p.raise("expected in VARIABLE %>");
 			}
 
 			// save to tree		
-			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(item_name, as, rowid, variable, reverse);
+			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(item_name, as, rowid, from, variable, reverse);
 			current_ = current_->as<ast::foreach_t>().prefix();
 #ifdef PARSER_TRACE
 			std::cout << "flow: foreach (" << item_name << " in " << variable << "; rowid " << rowid << ", reverse " << reverse << ", as " << as << ", from " << from << "\n";
@@ -1934,24 +1936,26 @@ namespace cppcms { namespace templates {
 		void if_t::condition_t::write(std::ostream& /* o */) {
 		}
 			
-		foreach_t::foreach_t(	const std::string& name, const std::string& as, 
-					const std::string& rowid, const std::string& array, 
-					bool reverse, base_ptr parent) 
+		foreach_t::foreach_t(	const expr::name& name, const expr::identifier& as, 
+					const expr::name& rowid, const int from,
+					const expr::variable& array, bool reverse, base_ptr parent) 
 			: base_t("foreach", true, parent) 
 			, name_(name)
 			, as_(as)
 			, rowid_(rowid)
+			, from_(from)
 			, array_(array) 
 			, reverse_(reverse) {}
 			
 		void foreach_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "foreach " << name_;
-			if(!as_.empty())
-				o << " (as " << as_ << ")";
-			if(!rowid_.empty())
-				o << " (and rowid named " << rowid_ << ")";
-			o << " in " << (reverse_ ? "reversed array " : "array ") << array_ << "{\n";
+			o << p << "foreach " << *name_;
+			if(as_)
+				o << " (as " << *as_ << ")";
+			if(rowid_)
+				o << " (and rowid named " << *rowid_ << ")";			
+			o << " starting from row " << from_;
+			o << " in " << (reverse_ ? "reversed array " : "array ") << *array_ << "{\n";
 			if(empty_) {
 				o << p << "\tempty = [\n";
 				empty_->dump(o, tabs+2);

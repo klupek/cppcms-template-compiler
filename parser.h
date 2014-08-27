@@ -387,12 +387,17 @@ namespace cppcms { namespace templates {
 				part_t(const std::string& sysname, bool has_end, base_ptr parent);
 				virtual base_ptr end(const std::string& what);
 			};
-			const std::string name_, as_, rowid_, array_;
+			const expr::name name_;
+			const expr::identifier as_;
+			const expr::name rowid_; // spec says it is identifier, but it is used as local scope variable name
+			const int from_;
+			const expr::variable array_;
 			const bool reverse_;
+
 			base_ptr empty_, separator_, item_;
 			base_ptr item_prefix_, item_suffix_;
 		public:
-			foreach_t(const std::string& name, const std::string& as, const std::string& rowid, const std::string& array, bool reverse, base_ptr parent);
+			foreach_t(const expr::name& name, const expr::identifier& as, const expr::name& rowid, const int from, const expr::variable& array, bool reverse, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
