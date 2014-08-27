@@ -182,7 +182,7 @@ namespace cppcms { namespace templates {
 		};
 
 		class root_t : public base_t {
-			std::vector<std::string> codes;
+			std::vector<expr::cpp> codes;
 			typedef std::map< expr::name_t, view_ptr > view_set_t;
 			typedef std::map< expr::name_t, view_set_t > skins_t;
 			skins_t skins;
@@ -192,7 +192,7 @@ namespace cppcms { namespace templates {
 			root_t();
 			base_ptr add_skin(const expr::name& name);
 			base_ptr set_mode(const std::string& mode);
-			base_ptr add_cpp(const std::string& code);
+			base_ptr add_cpp(const expr::cpp& code);
 			base_ptr add_view(const expr::name& name, const expr::identifier& data, const expr::name& parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
@@ -250,9 +250,9 @@ namespace cppcms { namespace templates {
 
 
 		class cppcode_t : public base_t {
-			const std::string code_;	
+			const expr::cpp code_;	
 		public:
-			cppcode_t(const std::string& code_, base_ptr parent);
+			cppcode_t(const expr::cpp& code_, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
@@ -527,7 +527,7 @@ namespace cppcms { namespace templates {
 		
 		// actions
 		void add_html(const std::string&);
-		void add_cpp(const std::string&);
+		void add_cpp(const expr::cpp&);
 
 	};
 

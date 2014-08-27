@@ -1040,7 +1040,7 @@ namespace cppcms { namespace templates {
 			std::cout << "global: template " << function_name << "\n";
 #endif
 		} else if(p.reset().try_token_ws("c++").skip_to("%>")) { // [ c++, \s+, cppcode, %> ] = 4
-			add_cpp(p.get(-2));
+			add_cpp(expr::make_cpp(p.get(-2)));
 		} else if(p.reset().try_token_ws("html").try_token("%>") || p.back(3).try_token_ws("xhtml").try_token("%>")) { // [ html|xhtml, \s+, %> ]
 			const std::string mode = p.get(-3);
 
@@ -1303,13 +1303,13 @@ namespace cppcms { namespace templates {
 		std::cout << "html: " << compress_html(html) << std::endl;
 	}
 
-	void template_parser::add_cpp(const std::string& cpp) {
+	void template_parser::add_cpp(const expr::cpp& cpp) {
 		if(current_->is_a<ast::root_t>())
 			current_ = current_->as<ast::root_t>().add_cpp(cpp);
 		else
 			current_ = current_->as<ast::has_children>().add<ast::cppcode_t>(cpp);
 #ifdef PARSER_TRACE
-		std::cout << "cpp: " << cpp << std::endl;
+		std::cout << "cpp: " << *cpp << std::endl;
 #endif
 	}
 
@@ -1489,7 +1489,7 @@ namespace cppcms { namespace templates {
 			return shared_from_this();
 		}
 
-		base_ptr root_t::add_cpp(const std::string& code) {
+		base_ptr root_t::add_cpp(const expr::cpp& code) {
 			codes.emplace_back(code);
 			return shared_from_this();
 		}
@@ -1534,8 +1534,8 @@ namespace cppcms { namespace templates {
 				o << p << "\t]\n";
 			}
 			o << p << "]; codes = [\n";
-			for(const std::string& code : codes)
-				o << p << "\t" << code << std::endl;
+			for(const expr::cpp& code : codes)
+				o << p << "\t" << *code << std::endl;
 			o << p << "];\n";
 		}
 
@@ -1610,7 +1610,7 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		cppcode_t::cppcode_t(const std::string& code, base_ptr parent)
+		cppcode_t::cppcode_t(const expr::cpp& code, base_ptr parent)
 			: base_t("c++", false, parent)
 			, code_(code) {}
 
