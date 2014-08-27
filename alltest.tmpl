@@ -99,6 +99,8 @@ next2
 <% cache "foo" %>  
     <% cache "bar" no triggers %>  
     <% end cache %>  
+    <% cache cachevarname no triggers %>  
+    <% end cache %>  
 <% end cache %>  
 <% cache "foo" on miss load_data() %>  
  <% trigger "bar" %> 

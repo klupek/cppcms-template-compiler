@@ -410,13 +410,14 @@ namespace cppcms { namespace templates {
 		};
 
 		class cache_t : public has_children {
-			const std::string name_, miss_;
+			const expr::ptr name_;
+			const expr::variable miss_;
 			const int duration_;
 			const bool recording_, triggers_;
-			std::vector<std::string> trigger_list_;
+			std::vector<expr::ptr> trigger_list_;
 		public:
-			cache_t(const std::string& name, const std::string& miss, int duration, bool recording, bool triggers, base_ptr parent);
-			base_ptr add_trigger(const std::string&);
+			cache_t(const expr::ptr& name, const expr::variable& miss, int duration, bool recording, bool triggers, base_ptr parent);
+			base_ptr add_trigger(const expr::ptr&);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);

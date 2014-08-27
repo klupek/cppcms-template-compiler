@@ -911,11 +911,14 @@ namespace cppcms { namespace templates {
 
 		// 'cache' ( VARIABLE | STRING ) [ 'for' NUMBER ] ['on' 'miss' VARIABLE() ] [ 'no' 'triggers' ] [ 'no' 'recording' ]
 		} else if(p.reset().try_token_ws("cache")) {
-			std::string name, miss;
+			expr::ptr name;
+			expr::variable miss;
 			int _for = -1;
 			bool no_triggers = false, no_recording = false;
-			if(p.try_variable_ws() || p.back(2).try_string_ws()) {
-				name = p.get(-2);
+			if(p.try_variable_ws()) { 
+				name = expr::make_variable(p.get(-2));			
+			} else if(p.back(2).try_string_ws()) {
+				name = expr::make_string(p.get(-2));
 			} else {
 				p.raise("expected VARIABLE or STRING");
 			}
@@ -927,7 +930,7 @@ namespace cppcms { namespace templates {
 			}
 
 			if(p.try_token_ws("on").try_token_ws("miss").try_variable()) { // TODO: () is required at the end of expression, but try_variable already consumes it
-				miss = p.get(-1);
+				miss = expr::make_variable(p.get(-1));
 			} else {
 				p.back(5);
 			}
@@ -953,15 +956,19 @@ namespace cppcms { namespace templates {
 			std::cout << "flow: cache " << name << ", miss = " << miss << ", for " << _for << ", no_triggers = " << no_triggers << ", no_recording = " << no_recording << "\n";
 #endif
 		} else if(p.reset().try_token_ws("trigger")) {
-			if(!p.try_variable() && !p.back(1).try_string()) {
+			expr::ptr name;
+			if(p.try_variable()) {
+				name = expr::make_variable(p.get(-1));
+			} else if(p.back(1).try_string()) {
+				name = expr::make_string(p.get(-1));
+			} else  {
 				p.raise("expected STRING or VARIABLE");
-			} else {
-				const std::string name = p.get(-1);
-				current_ = current_->as<ast::cache_t>().add_trigger(name);
-#ifdef PARSER_TRACE
-				std::cout << "flow: trigger " << name << std::endl;
-#endif
 			}
+
+			current_ = current_->as<ast::cache_t>().add_trigger(name);
+#ifdef PARSER_TRACE
+			std::cout << "flow: trigger " << name << std::endl;
+#endif
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %>");
 			}
@@ -2053,7 +2060,7 @@ namespace cppcms { namespace templates {
 			return item_;
 		}
 			
-		cache_t::cache_t(	const std::string& name, const std::string& miss, 
+		cache_t::cache_t(	const expr::ptr& name, const expr::variable& miss, 
 					int duration, bool recording, bool triggers, base_ptr parent) 
 			: has_children("cache", true, parent) 
 			, name_(name)
@@ -2062,26 +2069,26 @@ namespace cppcms { namespace templates {
 			, recording_(recording)
 			, triggers_(triggers) {}
 			
-		base_ptr cache_t::add_trigger(const std::string& t) {
+		base_ptr cache_t::add_trigger(const expr::ptr& t) {
 			trigger_list_.emplace_back(t);
 			return shared_from_this();
 		}
 		
 		void cache_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
-			o << p << "cache " << name_;
+			o << p << "cache " << *name_;
 			if(duration_ > -1)
 				o << " (cached for " << duration_ << "s)";
-			if(!miss_.empty())
-				o << " (call " << miss_ << " on miss)";
+			if(miss_)
+				o << " (call " << *miss_ << " on miss)";
 			o << " recording is " << (recording_ ? "ON" : "OFF") << 
 				" and triggers are " << (triggers_ ? "ON" : "OFF");
 			if(trigger_list_.empty()) {
 				o << " - no triggers\n";
 			} else { 
 				o << " - triggers [\n";
-				for(const std::string& trigger : trigger_list_)
-					o << p << "\t" << trigger << std::endl;
+				for(const expr::ptr& trigger : trigger_list_)
+					o << p << "\t" << *trigger << std::endl;
 				o << p << "]\n";
 			}
 			o << p << "cache children = [\n";
