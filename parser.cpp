@@ -19,6 +19,12 @@ namespace cppcms { namespace templates {
 		return std::string(&input[beg], &input[end]);
 	}
 
+	bool is_whitespace_string(const std::string& input) {
+		return std::all_of(input.begin(), input.end(), [](char c) {
+			return std::isspace(c);
+		});
+	}
+
 	static std::string decode_escaped_string(const std::string& input) {
 		std::string result;
 		bool escaped = false;
@@ -709,12 +715,6 @@ namespace cppcms { namespace templates {
 	}
 
 	void template_parser::parse() {
-		bool last_item_was_code = true;
-		auto is_spaces = [](const std::string& input) {
-			return std::all_of(input.begin(), input.end(), [](const char c) {
-				return c == ' ' || c == '\t' || c == '\n' || c == '\r';
-			});
-		};
 		try {
 			while(!p.finished() && !p.failed()) {
 				p.push();
@@ -722,13 +722,11 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_DEBUG
 					std::cout << ">>> main -> <%\n";
 #endif
-					if(!last_item_was_code || !is_spaces(p.get(-2))) {
-						size_t pos = p.get(-2).find("%>");
-						if(pos != std::string::npos) {
-							p.back(2).skip_to("%>").back(1).raise("unexpected %>");
-						}
-						add_html(p.get(-2));
+					size_t pos = p.get(-2).find("%>");
+					if(pos != std::string::npos) {
+						p.back(2).skip_to("%>").back(1).raise("unexpected %>");
 					}
+					add_html(p.get(-2));
 
 					p.push();
 					if(p.try_token("=").skipws(false)) { // [ <html><blah>..., <%, =, \s*] = 3
@@ -747,7 +745,6 @@ namespace cppcms { namespace templates {
 						} 
 					}
 					p.pop();
-					last_item_was_code  = true;
 				} else if(p.reset().skip_to("%>")) {
 					p.reset().raise("found unexpected %>");
 				} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
@@ -755,7 +752,6 @@ namespace cppcms { namespace templates {
 					std::cout << ">>> main -> skip to end\n";
 #endif
 					add_html(p.get(-1));
-					last_item_was_code = false;
 				} else {
 					p.reset().raise("expected <%=, <% or EOF");
 				}
@@ -1300,7 +1296,29 @@ namespace cppcms { namespace templates {
 	}
 
 	void template_parser::add_html(const std::string& html) {
+		if(html.empty() || (!current_->is_a<ast::has_children>() && is_whitespace_string(html))) {
+			// ignore whitespaces between <% %> blocks outside templates
+			return;
+		}
+		
+		expr::ptr ptr;
+		if(tree_->mode() == "html")
+			ptr = expr::make_html(html);
+		else if(tree_->mode() == "xhtml")
+			ptr = expr::make_xhtml(html);
+		else
+			ptr = expr::make_text(html);
+		try {
+			current_->as<ast::has_children>().add<ast::text_t>(ptr);
+		} catch(const std::bad_cast&) {
+			std::cerr << "ERROR: html/text can not be added to " << current_->sysname() << " node\n\tvalue = ";
+			std::cerr << compress_html(html) << std::endl;
+			throw;
+		}
+
+#ifdef PARSER_TRACE
 		std::cout << "html: " << compress_html(html) << std::endl;
+#endif
 	}
 
 	void template_parser::add_cpp(const expr::cpp& cpp) {
@@ -1316,6 +1334,10 @@ namespace cppcms { namespace templates {
 	namespace expr {
 		base_t::base_t(const std::string& value)
 			: value_(value) {}
+
+		std::string text_t::repr() const { 
+			return value_;
+		}
 
 		double number_t::real() const {
 			return boost::lexical_cast<double>(value_);
@@ -1375,6 +1397,18 @@ namespace cppcms { namespace templates {
 
 		bool name_t::operator<(const name_t& rhs) const {
 			return repr() < rhs.repr();
+		}
+		
+		html make_html(const std::string& repr) {
+			return std::make_shared<html_t>(compress_html(repr));
+		}
+		
+		xhtml make_xhtml(const std::string& repr) {
+			return std::make_shared<xhtml_t>(compress_html(repr));
+		}
+		
+		text make_text(const std::string& repr) {
+			return std::make_shared<text_t>(repr);
 		}
 		
 		number make_number(const std::string& repr) {
@@ -1444,6 +1478,18 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const cpp_t& obj) {
 			return o << "[cpp:" << obj.repr() << "]";
 		}
+
+		std::ostream& operator<<(std::ostream& o, const text_t& obj) {
+			return o << "[text:" << obj.repr() << "]";
+		}
+
+		std::ostream& operator<<(std::ostream& o, const html_t& obj) {
+			return o << "[html:" << obj.repr() << "]";
+		}
+
+		std::ostream& operator<<(std::ostream& o, const xhtml_t& obj) {
+			return o << "[xhtml:" << obj.repr() << "]";
+		}
 		
 		std::ostream& operator<<(std::ostream& o, const base_t& obj) {
 			// currently only usefull types are detected
@@ -1454,6 +1500,12 @@ namespace cppcms { namespace templates {
 				o << obj.as<variable_t>();
 			else if(obj.is_a<string_t>())
 				o << obj.as<string_t>();
+			else if(obj.is_a<html_t>())
+				o << obj.as<html_t>();
+			else if(obj.is_a<text_t>())
+				o << obj.as<text_t>();
+			else if(obj.is_a<xhtml_t>())
+				o << obj.as<xhtml_t>();
 			else
 				throw std::logic_error(std::string("could not autodetect type ") + typeid(obj).name());
 			o << "]";
@@ -1503,6 +1555,10 @@ namespace cppcms { namespace templates {
 			).first->second;
 		}
 
+		std::string root_t::mode() const { 
+			return mode_;
+		}
+
 		base_ptr root_t::end(const std::string& what) {
 			const std::string current = (current_skin == skins.end() ? "__root" : "skin");
 			if(what.empty() || what == current) {
@@ -1537,6 +1593,20 @@ namespace cppcms { namespace templates {
 			for(const expr::cpp& code : codes)
 				o << p << "\t" << *code << std::endl;
 			o << p << "];\n";
+		}
+
+		text_t::text_t(const expr::ptr& value, base_ptr parent)  
+			: base_t("text", false, parent)
+			, value_(value) {}
+
+		void text_t::dump(std::ostream& o, int tabs) {
+			const std::string p(tabs, '\t');
+			o << p << "text: " << *value_ << std::endl;			
+		}
+
+		void text_t::write(std::ostream&) {}
+		base_ptr text_t::end(const std::string&) {
+			throw std::logic_error("unreachable code -- this is not block node");			
 		}
 
 		void view_t::write(std::ostream& /* o */) {

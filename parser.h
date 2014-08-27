@@ -17,6 +17,9 @@ namespace cppcms { namespace templates {
 		class string_t;
 		class filter_t;
 		class name_t;
+		class text_t;
+		class html_t;
+		class xhtml_t;
 		class identifier_t;
 		class call_list_t;
 		class param_list_t;
@@ -32,6 +35,9 @@ namespace cppcms { namespace templates {
 		typedef std::shared_ptr<call_list_t> call_list;
 		typedef std::shared_ptr<param_list_t> param_list;
 		typedef std::shared_ptr<cpp_t> cpp;
+		typedef std::shared_ptr<text_t> text;
+		typedef std::shared_ptr<html_t> html;
+		typedef std::shared_ptr<xhtml_t> xhtml;
 
 		number make_number(const std::string& repr);
 		variable make_variable(const std::string& repr);
@@ -42,6 +48,9 @@ namespace cppcms { namespace templates {
 		call_list make_call_list(const std::string& repr);
 		param_list make_param_list(const std::string& repr);
 		cpp make_cpp(const std::string& repr);
+		text make_text(const std::string& repr);
+		html make_html(const std::string& repr);
+		xhtml make_xhtml(const std::string& repr);
 		
 		class base_t {
 		protected:
@@ -61,6 +70,15 @@ namespace cppcms { namespace templates {
 			virtual std::string repr() const = 0;
 			virtual ~base_t() {}
 		};
+
+		class text_t : public base_t {
+		public:
+			using base_t::base_t;
+			virtual std::string repr() const;
+		};
+
+		class html_t : public text_t { using text_t::text_t; };
+		class xhtml_t : public text_t { using text_t::text_t; };
 
 		class number_t : public base_t {
 		public:
@@ -130,6 +148,9 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const filter_t& obj);
 		std::ostream& operator<<(std::ostream& o, const variable_t& obj);
 		std::ostream& operator<<(std::ostream& o, const cpp_t& obj);
+		std::ostream& operator<<(std::ostream& o, const text_t& obj);
+		std::ostream& operator<<(std::ostream& o, const html_t& obj);
+		std::ostream& operator<<(std::ostream& o, const xhtml_t& obj);
 		std::ostream& operator<<(std::ostream& o, const base_t& obj);		
 	}
 
@@ -180,6 +201,16 @@ namespace cppcms { namespace templates {
 			const std::string& sysname() const;
 			bool block() const;
 		};
+		
+		class text_t : public base_t {
+			const expr::ptr value_;
+		public:
+			text_t(const expr::ptr& value, base_ptr parent);
+			virtual void write(std::ostream&);
+			virtual void dump(std::ostream& o, int tabs = 0);
+			virtual base_ptr end(const std::string& what);
+		};
+
 
 		class root_t : public base_t {
 			std::vector<expr::cpp> codes;
@@ -194,6 +225,7 @@ namespace cppcms { namespace templates {
 			base_ptr set_mode(const std::string& mode);
 			base_ptr add_cpp(const expr::cpp& code);
 			base_ptr add_view(const expr::name& name, const expr::identifier& data, const expr::name& parent);
+			std::string mode() const;
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
@@ -422,6 +454,7 @@ namespace cppcms { namespace templates {
 			virtual void write(std::ostream& o);
 			virtual base_ptr end(const std::string& what);
 		};
+
 
 
 
