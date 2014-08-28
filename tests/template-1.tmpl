@@ -1,0 +1,15 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			foobar 
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			bar foo
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+			baz baz
+		<% end template %>
+	<% end view %> 
+	<% view page uses data::page extends master %>
+	<% end view %>  
+<% end %>  

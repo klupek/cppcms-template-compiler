@@ -123,7 +123,7 @@ namespace cppcms { namespace templates {
 
 	
 	static std::string compress_html(const std::string& input) {
-		std::string result(input.length()*2, 0);
+		std::string result;
 		char translate[255] = { 0 };
 		translate[static_cast<unsigned int>('\a')] = 'a';
 		translate[static_cast<unsigned int>('\b')] = 'b'; 
@@ -134,7 +134,9 @@ namespace cppcms { namespace templates {
 		translate[static_cast<unsigned int>('\v')] = 'v';
 		const char hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 		for(const char c : input) {
-			if(std::isprint(c)) {
+			if(c == '"') {
+				result += "\\x22";
+			} else if(std::isprint(c)) {
 				result += c;
 			} else if(translate[static_cast<int>(c)] > 0) {
 				result += '\\';
@@ -1479,7 +1481,7 @@ namespace cppcms { namespace templates {
 			: value_(value) {}
 
 		std::string text_t::repr() const { 
-			return value_;
+			return "\"" + value_ + "\"";
 		}
 
 		double number_t::real() const {
@@ -1551,7 +1553,7 @@ namespace cppcms { namespace templates {
 		}
 		
 		text make_text(const std::string& repr) {
-			return std::make_shared<text_t>(repr);
+			return std::make_shared<text_t>(compress_html(repr));
 		}
 		
 		number make_number(const std::string& repr) {
@@ -1783,6 +1785,10 @@ namespace cppcms { namespace templates {
 				o << "cppcms::base_view(_s)";
 			o << ",content(_content)\n" << ln(line()) << "{\n" << ln(line()) << "}\n";
 
+			for(const templates_t::value_type& tpl : templates) {
+				tpl.second->write(context, o);
+			}
+
 			o << ln(endline_) << "}; // end of class " << name_->repr() << "\n";
 		}
 			
@@ -1811,7 +1817,9 @@ namespace cppcms { namespace templates {
 			o << p << "text: " << *value_ << std::endl;			
 		}
 
-		void text_t::write(generator::context& context, std::ostream&) {}
+		void text_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line()) << "out() << " << value_->repr() << ";\n";
+		}
 		base_ptr text_t::end(const std::string&, file_position_t) {
 			throw std::logic_error("unreachable code -- this is not block node");			
 		}
@@ -1826,13 +1834,19 @@ namespace cppcms { namespace templates {
 			}
 		}
 
-		void template_t::write(generator::context& context, std::ostream& /* o */) {
+		void template_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line()) << "virtual void " << name_->repr() << arguments_->repr() << "{\n";
+			for(const base_ptr child : children) {
+				child->write(context, o);
+			}
+			o << ln(endline_) << "} // end of template " << name_->repr() << "\n";
 		}
 
 		base_ptr view_t::add_template(const expr::name& name, file_position_t line, const expr::param_list& arguments) {
-			return templates.emplace(
+			templates.emplace_back(
 				*name, std::make_shared<template_t>(name, line, arguments, shared_from_this())
-			).first->second;
+			);
+			return templates.back().second; 
 		}
 		view_t::view_t(const expr::name& name, file_position_t line, const expr::identifier& data, const expr::name& master, base_ptr parent)
 			: base_t("view", line, true, parent)

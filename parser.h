@@ -274,7 +274,7 @@ namespace cppcms { namespace templates {
 		};	
 		
 		class view_t : public base_t {
-			typedef std::map<expr::name_t, template_ptr> templates_t;
+			typedef std::vector<std::pair<expr::name_t, template_ptr>> templates_t;
 			templates_t templates;
 			const expr::name name_, master_;
 			const expr::identifier data_;
