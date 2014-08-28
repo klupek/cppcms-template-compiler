@@ -8,6 +8,16 @@ namespace cppcms { namespace templates {
 		return ( c >= '0' && c <= '9' );
 	}
 
+	struct ln { 
+		const size_t line_;
+		const std::string file_;
+		ln(size_t line, const std::string& file) : line_(line), file_(file) {}
+	};
+
+	std::ostream& operator<<(std::ostream&o, const ln& obj) {
+		return o << "#line " << obj.line_ << " \"" << obj.file_ << "\"\n";
+	}
+
 	std::string trim(const std::string& input) {
 		size_t beg = 0, end = input.length();
 		
@@ -1659,9 +1669,10 @@ namespace cppcms { namespace templates {
 			return mode_;
 		}
 
-		base_ptr root_t::end(const std::string& what, size_t) {
+		base_ptr root_t::end(const std::string& what, size_t line) {
 			const std::string current = (current_skin == skins.end() ? "__root" : "skin");
 			if(what.empty() || what == current) {
+				current_skin->second.endline = line; 
 				current_skin = skins.end();
 			} else if(current == "skin") {
 				throw std::runtime_error("expected 'end skin', not 'end " + what + "'");
@@ -1671,12 +1682,40 @@ namespace cppcms { namespace templates {
 			return shared_from_this();
 		}
 
-		void root_t::write(std::ostream& o) {
+		void root_t::write(generator::context& context, std::ostream& o) {
+			for(const code_t& code : codes) {
+				o << ln(code.line, context.filename) << code.code << std::endl;
+			}
+
 			for(const skins_t::value_type& skin : skins) {
+				o << ln(skin.second.line, context.filename);
+				o << "namespace " << skin.first.repr() << " {\n";
+				context.skin = skin.first.repr();
 				for(const view_set_t::value_type& view : skin.second.views) {
-					view.second->write(o);
+					view.second->write(context, o);
 				}
+				o << ln(skin.second.endline, context.filename);
+				o << "} // end of namespace " << skin.first << "\n";
 			}	       
+		}
+		
+		void view_t::write(generator::context& context, std::ostream& o) {
+			context.skins[context.skin].views.emplace_back( generator::context::view_t { name_->repr(), data_->repr() });
+			o << ln(line(), context.filename);
+			o << "struct " << name_->repr() << ":public ";
+			if(master_)
+				o << master_->repr();
+			else
+				o << "cppcms::base_view\n";
+			o << " {\n";
+			
+			o << ln(line(), context.filename);
+			o << data_->repr() << " & content;\n";
+			
+			o << ln(line(), context.filename);
+			o << name_->repr() << "(std::ostream & _s, " << data_->repr() << " & _content):cppcms::base_view(_s),content(_content) {}\n";
+
+			o << ln(endline_, context.filename) << "};\n";
 		}
 			
 		void root_t::dump(std::ostream& o, int tabs) {
@@ -1704,23 +1743,22 @@ namespace cppcms { namespace templates {
 			o << p << "text: " << *value_ << std::endl;			
 		}
 
-		void text_t::write(std::ostream&) {}
+		void text_t::write(generator::context& context, std::ostream&) {}
 		base_ptr text_t::end(const std::string&, size_t) {
 			throw std::logic_error("unreachable code -- this is not block node");			
 		}
 
-		void view_t::write(std::ostream& /* o */) {
-		}
 
-		base_ptr view_t::end(const std::string& what,size_t) {
+		base_ptr view_t::end(const std::string& what,size_t line) {
 			if(what.empty() || what == "view") {
+				endline_ = line;
 				return parent();
 			} else {
 				throw std::runtime_error("expected 'end view', not 'end " + what + "'");
 			}
 		}
 
-		void template_t::write(std::ostream& /* o */) {
+		void template_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 
 		base_ptr view_t::add_template(const expr::name& name, size_t line, const expr::param_list& arguments) {
@@ -1732,7 +1770,8 @@ namespace cppcms { namespace templates {
 			: base_t("view", line, true, parent)
 			, name_(name)
 			, master_(master) 
-			, data_(data) {}
+			, data_(data)
+	       		, endline_(-1)	{}
 		
 		void view_t::dump(std::ostream& o, int tabs) {
 			const std::string p(tabs, '\t');
@@ -1750,22 +1789,24 @@ namespace cppcms { namespace templates {
 		}
 			
 		has_children::has_children(const std::string& sysname, size_t line, bool block, base_ptr parent) 
-			: base_t(sysname, line, block, parent) {}
+			: base_t(sysname, line, block, parent)
+	       		, endline_(-1)	{}
 			
 		void has_children::dump(std::ostream& o, int tabs) {
 			for(const base_ptr& child : children) 
 				child->dump(o, tabs);
 		}
 		
-		void has_children::write(std::ostream& /* o */) {}
+		void has_children::write(generator::context& context, std::ostream& /* o */) {}
 
 		template_t::template_t(const expr::name& name, size_t line, const expr::param_list& arguments, base_ptr parent) 
 			: has_children("template", line, true, parent)
 	       		, name_(name) 
 			, arguments_(arguments) {}
 
-		base_ptr template_t::end(const std::string& what,size_t) {
+		base_ptr template_t::end(const std::string& what,size_t line) {
 			if(what.empty() || what == "template") {
+				endline_ = line;
 				return parent();
 			} else {
 				throw std::runtime_error("expected 'end template', not 'end " + what + "'");
@@ -1789,7 +1830,7 @@ namespace cppcms { namespace templates {
 			o << p << "c++: " << code_ << std::endl;
 		}
 
-		void cppcode_t::write(std::ostream& /* o */) {
+		void cppcode_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 
 		base_ptr cppcode_t::end(const std::string&,size_t) {
@@ -1818,7 +1859,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void variable_t::write(std::ostream& /* o */) {
+		void variable_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 			
 		fmt_function_t::fmt_function_t(	const std::string& name,
@@ -1855,7 +1896,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void fmt_function_t::write(std::ostream& /* o */) {
+		void fmt_function_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 		
 		ngt_t::ngt_t(	size_t line,
@@ -1894,7 +1935,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void ngt_t::write(std::ostream& /* o */) {
+		void ngt_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 			
 		include_t::include_t(	const expr::call_list& name, size_t line, const expr::identifier& from, 
@@ -1932,7 +1973,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void include_t::write(std::ostream& /* o */) {
+		void include_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 
 		form_t::form_t(const expr::name& style, size_t line, const expr::variable& name, base_ptr parent)
@@ -1949,7 +1990,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		void form_t::write(std::ostream& /* o */) {
+		void form_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 		
 		csrf_t::csrf_t(size_t line, const expr::name& style, base_ptr parent)
@@ -1968,7 +2009,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		void csrf_t::write(std::ostream& /* o */) {
+		void csrf_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 		
 		render_t::render_t(size_t line, const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent)
@@ -1997,7 +2038,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		void render_t::write(std::ostream& /* o */) {
+		void render_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 			
 		using_t::using_t(size_t line, const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent)
@@ -2019,15 +2060,16 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		base_ptr using_t::end(const std::string& what,size_t) {
+		base_ptr using_t::end(const std::string& what,size_t line) {
 			if(what.empty() || what == "using") {
+				endline_ = line;
 				return parent();
 			} else {
 				throw std::runtime_error("expected 'end using', not 'end '" + what + "'");
 			}
 		}
 		
-		void using_t::write(std::ostream& /* o */) {
+		void using_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 				
 		
@@ -2074,7 +2116,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("unreachable code (or rather: bug)");
 		}
 		
-		void if_t::write(std::ostream& /* o */) {
+		void if_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 		
 		void if_t::condition_t::dump(std::ostream& o, int tabs) {
@@ -2104,15 +2146,16 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		base_ptr if_t::condition_t::end(const std::string& what,size_t) {
+		base_ptr if_t::condition_t::end(const std::string& what,size_t line) {
 			if(what.empty() || what == "if") {
+				endline_ = line;
 				return parent()->parent(); // this <- if_t <- if_parent, aka end if statement
 			} else {
 				throw std::runtime_error("expected 'end if', not 'end '" + what + "'");
 			}
 		}
 		
-		void if_t::condition_t::write(std::ostream& /* o */) {
+		void if_t::condition_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 			
 		foreach_t::foreach_t(	size_t line, 
@@ -2182,7 +2225,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("unreachable code (or rather: bug)");
 		}
 		
-		void foreach_t::write(std::ostream& /* o */) {}
+		void foreach_t::write(generator::context& context, std::ostream& /* o */) {}
 
 		foreach_t::part_t::part_t(size_t line, const std::string& sysname, bool has_end, base_ptr parent) 
 			: has_children(sysname, line, true, parent)
@@ -2191,12 +2234,14 @@ namespace cppcms { namespace templates {
 		base_ptr foreach_t::part_t::end(const std::string& what, size_t line) {
 			if(has_end_) { // aka: it is 'item'
 				if(what.empty() || what == sysname()) {
+					endline_ = line;
 					return parent()->as<foreach_t>().suffix(line);
 				} else {
 					throw std::runtime_error("expected 'end " + sysname() + "', not 'end '" + what + "'");
 				}
 			} else {
 				if(what.empty() || what == "foreach") {
+					endline_ = line;
 					return parent()->parent(); // this <- foreach_t <- foreach parent
 				} else {
 					throw std::runtime_error("expected 'end foreach', not 'end '" + what + "'");
@@ -2271,11 +2316,12 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		void cache_t::write(std::ostream& /* o */) {
+		void cache_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 		
-		base_ptr cache_t::end(const std::string& what,size_t) {
+		base_ptr cache_t::end(const std::string& what,size_t line) {
 			if(what.empty() || what == "cache") {
+				endline_ = line;
 				return parent();
 			} else {
 				throw std::runtime_error("expected 'end cache', not 'end '" + what + "'");
@@ -2293,6 +2339,12 @@ int main(int /*argc*/, char **argv) {
 	const std::string input(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
 	cppcms::templates::template_parser p(input);
 	p.parse();
-	p.tree()->dump(std::cout);
+	if(std::string(argv[2]) == "--ast")
+		p.tree()->dump(std::cout);
+	else {
+		cppcms::templates::generator::context ctx;
+		ctx.filename = "blah";
+		p.tree()->write(ctx, std::cout);
+	}
 	return 0;
 }

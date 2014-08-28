@@ -153,6 +153,20 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const xhtml_t& obj);
 		std::ostream& operator<<(std::ostream& o, const base_t& obj);		
 	}
+	
+	namespace generator {
+		struct context {
+			struct view_t { 
+				const std::string name, data;
+			};
+			struct skin_t {
+				std::vector< view_t > views;
+			};
+
+			std::map<std::string, skin_t> skins;
+			std::string filename, skin;
+		};
+	}
 
 	namespace ast {
 
@@ -196,7 +210,7 @@ namespace cppcms { namespace templates {
 				}
 			}
 
-			virtual void write(std::ostream&) = 0;
+			virtual void write(generator::context& context, std::ostream&) = 0;
 			virtual void dump(std::ostream& o, int tabs = 0) = 0;
 			virtual base_ptr end(const std::string& what, size_t line) = 0;
 			base_ptr parent();
@@ -208,7 +222,7 @@ namespace cppcms { namespace templates {
 			const expr::ptr value_;
 		public:
 			text_t(const expr::ptr& value, size_t line, base_ptr parent);
-			virtual void write(std::ostream&);
+			virtual void write(generator::context& context, std::ostream&);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
@@ -222,7 +236,7 @@ namespace cppcms { namespace templates {
 			std::vector<code_t> codes;
 			typedef std::map< expr::name_t, view_ptr > view_set_t;
 			struct skin_t {
-				size_t line;
+				size_t line, endline;
 				view_set_t views;
 			};
 
@@ -239,7 +253,7 @@ namespace cppcms { namespace templates {
 			base_ptr add_view(const expr::name& name, size_t line, const expr::identifier& data, const expr::name& parent);
 			std::string mode() const;
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 			// TODO: add .clear() method, circular dependencies in shared pointers
 		};	
@@ -249,17 +263,19 @@ namespace cppcms { namespace templates {
 			templates_t templates;
 			const expr::name name_, master_;
 			const expr::identifier data_;
+			size_t endline_;
 		public:
 			base_ptr add_template(const expr::name& name, size_t line, const expr::param_list& arguments);
 			virtual void dump(std::ostream& o, int tabs = 0);
 			view_t(const expr::name& name, size_t line, const expr::identifier& data, const expr::name& master, base_ptr parent);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 		
 		class has_children : public base_t {
 		protected:
 			std::vector<base_ptr> children;
+			size_t endline_;
 		public:
 			has_children(const std::string& sysname, size_t line, bool block, base_ptr parent);
 
@@ -278,7 +294,7 @@ namespace cppcms { namespace templates {
 			}
 			
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 		};
 
 		class template_t : public has_children {
@@ -287,7 +303,7 @@ namespace cppcms { namespace templates {
 		public:
 			template_t(const expr::name& name, size_t line, const expr::param_list& arguments, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 			
 		};
@@ -298,7 +314,7 @@ namespace cppcms { namespace templates {
 		public:
 			cppcode_t(const expr::cpp& code_, size_t line, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -308,7 +324,7 @@ namespace cppcms { namespace templates {
 		public:
 			variable_t(const expr::variable& name, size_t line, const std::vector<expr::filter>& filters, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 			
@@ -327,7 +343,7 @@ namespace cppcms { namespace templates {
 			fmt_function_t(const std::string& name, size_t line, const expr::string& fmt, 
 					const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -338,7 +354,7 @@ namespace cppcms { namespace templates {
 		public:
 			ngt_t(size_t line, const expr::string& singular, const expr::string& plural, const expr::variable& variable, const using_options_t& uos, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -351,7 +367,7 @@ namespace cppcms { namespace templates {
 			include_t(const expr::call_list& name, size_t line, const expr::identifier& from, 
 					const expr::identifier& _using, const expr::variable& with, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -361,7 +377,7 @@ namespace cppcms { namespace templates {
 		public:
 			form_t(const expr::name& style, size_t line, const expr::variable& name, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 		
@@ -370,7 +386,7 @@ namespace cppcms { namespace templates {
 		public:
 			csrf_t(size_t line, const expr::name& style, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -380,7 +396,7 @@ namespace cppcms { namespace templates {
 		public:
 			render_t(size_t line, const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -391,7 +407,7 @@ namespace cppcms { namespace templates {
 		public:
 			using_t(size_t line, const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -407,7 +423,7 @@ namespace cppcms { namespace templates {
 			public:
 				condition_t(size_t line, type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent);
 				virtual void dump(std::ostream& o, int tabs = 0);
-				virtual void write(std::ostream& o);
+				virtual void write(generator::context& context, std::ostream& o);
 				virtual base_ptr end(const std::string& what, size_t line);
 			};
 			typedef std::shared_ptr<condition_t> condition_ptr;
@@ -420,7 +436,7 @@ namespace cppcms { namespace templates {
 			base_ptr add_condition(size_t line, const expr::cpp& cond, bool negate);
 			
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
 
@@ -443,7 +459,7 @@ namespace cppcms { namespace templates {
 		public:
 			foreach_t(size_t line, const expr::name& name, const expr::identifier& as, const expr::name& rowid, const int from, const expr::variable& array, bool reverse, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 
 			base_ptr prefix(size_t line);
@@ -467,15 +483,11 @@ namespace cppcms { namespace templates {
 			cache_t(size_t line, const expr::ptr& name, const expr::variable& miss, int duration, bool recording, bool triggers, base_ptr parent);
 			base_ptr add_trigger(size_t line, const expr::ptr&);
 			virtual void dump(std::ostream& o, int tabs = 0);
-			virtual void write(std::ostream& o);
+			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, size_t line);
 		};
-
-
-
-
-
 	}
+
 
 	class parser_source {
 		const std::string input_;
