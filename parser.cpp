@@ -295,6 +295,8 @@ namespace cppcms { namespace templates {
 		return line_;
 	}
 
+	size_t parser::line() const { return source_.line(); }
+
 	parser::parser(const std::string& input)
 		: source_(input)
        		, failed_(0) {}
@@ -892,7 +894,7 @@ namespace cppcms { namespace templates {
 			std::cout << "flow: " << verb << " type " << type << ", cond = " << cond << ", variable = " << variable << std::endl;
 #endif
 			if(verb == "if") {
-				current_ = current_->as<ast::has_children>().add<ast::if_t>();
+				current_ = current_->as<ast::has_children>().add<ast::if_t>(p.line());
 			} else if(verb == "elif") {
 				if(current_->sysname() == "condition") {
 					current_ = current_->parent();
@@ -902,11 +904,11 @@ namespace cppcms { namespace templates {
 			}
 				
 			if(type == ast::if_t::type_t::if_cpp) {
-				current_ = current_->as<ast::if_t>().add_condition(cond, negate);				
+				current_ = current_->as<ast::if_t>().add_condition(p.line(), cond, negate);				
 			} else if(type == ast::if_t::type_t::if_regular && variable->repr() == "rtl") {
-				current_ = current_->as<ast::if_t>().add_condition(ast::if_t::type_t::if_rtl, negate);
+				current_ = current_->as<ast::if_t>().add_condition(p.line(), ast::if_t::type_t::if_rtl, negate);
 			} else {
-				current_ = current_->as<ast::if_t>().add_condition(type, variable, negate);
+				current_ = current_->as<ast::if_t>().add_condition(p.line(), type, variable, negate);
 			}
 		} else if(p.reset().try_token_ws("else").try_token_ws("%>")) {
 			if(current_->sysname() == "condition") {
@@ -914,7 +916,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.raise("unexpected else found");
 			}
-			current_ = current_->as<ast::if_t>().add_condition(ast::if_t::type_t::if_else, false);
+			current_ = current_->as<ast::if_t>().add_condition(p.line(), ast::if_t::type_t::if_else, false);
 #ifdef PARSER_TRACE
 			std::cout << "flow: else\n";
 #endif
@@ -957,26 +959,26 @@ namespace cppcms { namespace templates {
 			}
 
 			// save to tree		
-			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(item_name, as, rowid, from, variable, reverse);
-			current_ = current_->as<ast::foreach_t>().prefix();
+			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(p.line(), item_name, as, rowid, from, variable, reverse);
+			current_ = current_->as<ast::foreach_t>().prefix(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: foreach (" << item_name << " in " << variable << "; rowid " << rowid << ", reverse " << reverse << ", as " << as << ", from " << from << "\n";
 #endif
 		} else if(p.reset().try_token_ws("item").try_token("%>")) {
 			// current_ is foreach_t > item_prefix
-			current_ = current_->parent()->as<ast::foreach_t>().item();
+			current_ = current_->parent()->as<ast::foreach_t>().item(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: item\n";
 #endif
 		} else if(p.reset().try_token_ws("empty").try_token("%>")) {
 			// current_ is foreach_t > something
-			current_ = current_->parent()->as<ast::foreach_t>().empty();
+			current_ = current_->parent()->as<ast::foreach_t>().empty(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: empty\n";
 #endif
 		} else if(p.reset().try_token_ws("separator").try_token("%>")) {
 			// current_ is foreach_t > something
-			current_ = current_->parent()->as<ast::foreach_t>().separator();
+			current_ = current_->parent()->as<ast::foreach_t>().separator(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: separator\n";
 #endif
@@ -992,7 +994,7 @@ namespace cppcms { namespace templates {
 			}
 			
 			// action
-			current_ = current_->end(what);
+			current_ = current_->end(what, p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: end " << what << "\n";
 #endif
@@ -1039,7 +1041,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected %>");
 			}
 
-			current_ = current_->as<ast::has_children>().add<ast::cache_t>(name, miss, _for, !no_recording, !no_triggers);
+			current_ = current_->as<ast::has_children>().add<ast::cache_t>(p.line(), name, miss, _for, !no_recording, !no_triggers);
 #ifdef PARSER_TRACE
 			std::cout << "flow: cache " << name << ", miss = " << miss << ", for " << _for << ", no_triggers = " << no_triggers << ", no_recording = " << no_recording << "\n";
 #endif
@@ -1053,7 +1055,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected STRING or VARIABLE");
 			}
 
-			current_ = current_->as<ast::cache_t>().add_trigger(name);
+			current_ = current_->as<ast::cache_t>().add_trigger(p.line(), name);
 #ifdef PARSER_TRACE
 			std::cout << "flow: trigger " << name << std::endl;
 #endif
@@ -1084,7 +1086,7 @@ namespace cppcms { namespace templates {
 			p.pop();
 			
 			// save to tree			
-			current_ = current_->as<ast::root_t>().add_skin(expr::make_name(skin_name));
+			current_ = current_->as<ast::root_t>().add_skin(expr::make_name(skin_name), p.line());
 #ifdef PARSER_TRACE
 			std::cout << "global: skin " << skin_name << "\n";
 #endif
@@ -1108,6 +1110,7 @@ namespace cppcms { namespace templates {
 				expr::name parent_name_ = (parent_name.empty() ? expr::name() : expr::make_name(parent_name));
 				current_ = current_->as<ast::root_t>().add_view(
 					expr::make_name(view_name), 
+					p.line(),
 					expr::make_identifier(data_name), 
 					parent_name_);
 #ifdef PARSER_TRACE
@@ -1123,6 +1126,7 @@ namespace cppcms { namespace templates {
 			// save to tree
 			current_ = current_->as<ast::view_t>().add_template(
 					expr::make_name(function_name),
+					p.line(),
 					expr::make_param_list(arguments));
 #ifdef PARSER_TRACE
 			std::cout << "global: template " << function_name << "\n";
@@ -1132,7 +1136,7 @@ namespace cppcms { namespace templates {
 		} else if(p.reset().try_token_ws("html").try_token("%>") || p.back(3).try_token_ws("xhtml").try_token("%>")) { // [ html|xhtml, \s+, %> ]
 			const std::string mode = p.get(-3);
 
-			current_ = current_->as<ast::root_t>().set_mode(mode);
+			current_ = current_->as<ast::root_t>().set_mode(mode, p.line());
 #ifdef PARSER_TRACE
 			std::cout << "global: mode " << mode << std::endl;
 #endif
@@ -1203,7 +1207,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected %> after gt expression");
 			}
 
-			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>(verb, fmt, options);
+			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>(verb, p.line(), fmt, options);
 #ifdef PARSER_TRACE
 			std::cout << "render: gt " << fmt << "\n";
 #endif
@@ -1217,7 +1221,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected %> after gt expression");
 			}
 
-			current_ = current_->as<ast::has_children>().add<ast::ngt_t>(singular, plural, variable, options);
+			current_ = current_->as<ast::has_children>().add<ast::ngt_t>(p.line(), singular, plural, variable, options);
 #ifdef PARSER_TRACE
 			std::cout << "render: ngt " << singular << "/" << plural << "/" << variable << std::endl;
 #endif
@@ -1229,7 +1233,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected %> after gt expression");
 			}
 
-			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>("url", url, options);			
+			current_ = current_->as<ast::has_children>().add<ast::fmt_function_t>("url", p.line(), url, options);			
 #ifdef PARSER_TRACE
 			std::cout << "render: url " << url << std::endl;
 #endif
@@ -1260,7 +1264,7 @@ namespace cppcms { namespace templates {
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
-			current_ = current_->as<ast::has_children>().add<ast::include_t>(id, from, _using, with);
+			current_ = current_->as<ast::has_children>().add<ast::include_t>(id, p.line(), from, _using, with);
 #ifdef PARSER_TRACE
 			std::cout << "render: include " << id;
 			if(!from.empty())
@@ -1293,7 +1297,7 @@ namespace cppcms { namespace templates {
 			}
 
 			// save to tree
-			current_ = current_->as<ast::has_children>().add<ast::using_t>(id, with, as);
+			current_ = current_->as<ast::has_children>().add<ast::using_t>(p.line(), id, with, as);
 #ifdef PARSER_TRACE
 			std::cout << "render: using " << id << std::endl;
 			std::cout << "\twith " << (with.empty() ? "(current)" : with) << std::endl;
@@ -1302,7 +1306,7 @@ namespace cppcms { namespace templates {
 		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]
 			const expr::name name = expr::make_name(p.get(-5));
 			const expr::variable var = expr::make_variable(p.get(-3));
-			current_ = current_->as<ast::has_children>().add<ast::form_t>(name, var);
+			current_ = current_->as<ast::has_children>().add<ast::form_t>(name, p.line(), var);
 #ifdef PARSER_TRACE
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 #endif
@@ -1314,7 +1318,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected csrf style(type) or %>");
 			}
 			// save to tree
-			current_ = current_->as<ast::has_children>().add<ast::csrf_t>(type);
+			current_ = current_->as<ast::has_children>().add<ast::csrf_t>(p.line(), type);
 #ifdef PARSER_TRACE
 			std::cout << "render: csrf " << ( type.empty() ? "(default)" : type ) << "\n";
 #endif
@@ -1350,7 +1354,7 @@ namespace cppcms { namespace templates {
 				p.raise("expected %>");
 			}
 			// save to tree
-			current_ = current_->as<ast::has_children>().add<ast::render_t>(skin, view, with);
+			current_ = current_->as<ast::has_children>().add<ast::render_t>(p.line(), skin, view, with);
 #ifdef PARSER_TRACE
 			std::cout << "render: render\n\tskin = " << (skin.empty() ? "(default)" : skin ) << "\n\tview = " << view << std::endl;
 			if(!with.empty())
@@ -1375,7 +1379,7 @@ namespace cppcms { namespace templates {
 				p.details().pop();
 			}
 			
-			current_ = current_->as<ast::has_children>().add<ast::variable_t>(expr, filters);
+			current_ = current_->as<ast::has_children>().add<ast::variable_t>(expr, p.line(), filters);
 #ifdef PARSER_TRACE
 			std::cout << "variable: " << expr << std::endl;
 #endif
@@ -1401,7 +1405,7 @@ namespace cppcms { namespace templates {
 		else
 			ptr = expr::make_text(html);
 		try {
-			current_->as<ast::has_children>().add<ast::text_t>(ptr);
+			current_->as<ast::has_children>().add<ast::text_t>(ptr, p.line());
 		} catch(const std::bad_cast&) {
 			std::cerr << "ERROR: html/text can not be added to " << current_->sysname() << " node\n\tvalue = ";
 			std::cerr << compress_html(html) << std::endl;
@@ -1415,9 +1419,9 @@ namespace cppcms { namespace templates {
 
 	void template_parser::add_cpp(const expr::cpp& cpp) {
 		if(current_->is_a<ast::root_t>())
-			current_ = current_->as<ast::root_t>().add_cpp(cpp);
+			current_ = current_->as<ast::root_t>().add_cpp(cpp, p.line());
 		else
-			current_ = current_->as<ast::has_children>().add<ast::cppcode_t>(cpp);
+			current_ = current_->as<ast::has_children>().add<ast::cppcode_t>(cpp, p.line());
 #ifdef PARSER_TRACE
 		std::cout << "cpp: " << *cpp << std::endl;
 #endif
@@ -1606,11 +1610,14 @@ namespace cppcms { namespace templates {
 			
 	}
 	namespace ast {
-		base_t::base_t(const std::string& sysname, bool block, base_ptr parent)
+		base_t::base_t(const std::string& sysname, size_t line, bool block, base_ptr parent)
 			: sysname_(sysname)
 	       		, parent_(parent) 
-			, block_(block) {}
-		
+			, block_(block) 
+			, line_(line) {}
+		size_t base_t::line() const {
+			return line_; 
+		}	
 		base_ptr base_t::parent() { return parent_; }
 		
 		const std::string& base_t::sysname() const {
@@ -1620,30 +1627,31 @@ namespace cppcms { namespace templates {
 		bool base_t::block() const { return block_; }
 
 		root_t::root_t() 
-			: base_t("root", true, nullptr)		
+			: base_t("root", 0, true, nullptr)		
  			, current_skin(skins.end()) {}
 
-		base_ptr root_t::add_skin(const expr::name& name) {
-			current_skin = skins.emplace( *name, view_set_t() ).first;
+		base_ptr root_t::add_skin(const expr::name& name, size_t line) {
+			current_skin = skins.emplace( *name, skin_t { line, view_set_t() } ).first;
 			return shared_from_this();
 		}
 
-		base_ptr root_t::set_mode(const std::string& mode) {
+		base_ptr root_t::set_mode(const std::string& mode, size_t line) {
 			mode_ = mode;
+			mode_line_ = line;
 			return shared_from_this();
 		}
 
-		base_ptr root_t::add_cpp(const expr::cpp& code) {
-			codes.emplace_back(code);
+		base_ptr root_t::add_cpp(const expr::cpp& code, size_t line) {
+			codes.emplace_back(code_t { line, code });
 			return shared_from_this();
 		}
 			
-		base_ptr root_t::add_view(const expr::name& name, const expr::identifier& data, const expr::name& parent) {
+		base_ptr root_t::add_view(const expr::name& name, size_t line, const expr::identifier& data, const expr::name& parent) {
 			if(current_skin == skins.end())
 				throw std::runtime_error("view must be inside skin");
 			
-			return current_skin->second.emplace(
-				*name, std::make_shared<view_t>(name, data, parent, shared_from_this())
+			return current_skin->second.views.emplace(
+				*name, std::make_shared<view_t>(name, line, data, parent, shared_from_this())
 			).first->second;
 		}
 
@@ -1651,7 +1659,7 @@ namespace cppcms { namespace templates {
 			return mode_;
 		}
 
-		base_ptr root_t::end(const std::string& what) {
+		base_ptr root_t::end(const std::string& what, size_t) {
 			const std::string current = (current_skin == skins.end() ? "__root" : "skin");
 			if(what.empty() || what == current) {
 				current_skin = skins.end();
@@ -1665,7 +1673,7 @@ namespace cppcms { namespace templates {
 
 		void root_t::write(std::ostream& o) {
 			for(const skins_t::value_type& skin : skins) {
-				for(const view_set_t::value_type& view : skin.second) {
+				for(const view_set_t::value_type& view : skin.second.views) {
 					view.second->write(o);
 				}
 			}	       
@@ -1675,20 +1683,20 @@ namespace cppcms { namespace templates {
 			std::string p(tabs, '\t');
 			o << p << "root with " << codes.size() << " codes, mode = " << (mode_.empty() ? "(default)" : mode_) << " [\n";
 			for(const skins_t::value_type& skin : skins) {
-				o << p << "\tskin " << skin.first << " with " << skin.second.size() << " views [\n";
-				for(const view_set_t::value_type& view : skin.second) {
+				o << p << "\tskin " << skin.first << " with " << skin.second.views.size() << " views [\n";
+				for(const view_set_t::value_type& view : skin.second.views) {
 					view.second->dump(o, tabs+2);
 				}
 				o << p << "\t]\n";
 			}
 			o << p << "]; codes = [\n";
-			for(const expr::cpp& code : codes)
-				o << p << "\t" << *code << std::endl;
+			for(const code_t& code : codes)
+				o << p << "\t" << *code.code << std::endl;
 			o << p << "];\n";
 		}
 
-		text_t::text_t(const expr::ptr& value, base_ptr parent)  
-			: base_t("text", false, parent)
+		text_t::text_t(const expr::ptr& value, size_t line, base_ptr parent)  
+			: base_t("text", line, false, parent)
 			, value_(value) {}
 
 		void text_t::dump(std::ostream& o, int tabs) {
@@ -1697,14 +1705,14 @@ namespace cppcms { namespace templates {
 		}
 
 		void text_t::write(std::ostream&) {}
-		base_ptr text_t::end(const std::string&) {
+		base_ptr text_t::end(const std::string&, size_t) {
 			throw std::logic_error("unreachable code -- this is not block node");			
 		}
 
 		void view_t::write(std::ostream& /* o */) {
 		}
 
-		base_ptr view_t::end(const std::string& what) {
+		base_ptr view_t::end(const std::string& what,size_t) {
 			if(what.empty() || what == "view") {
 				return parent();
 			} else {
@@ -1715,13 +1723,13 @@ namespace cppcms { namespace templates {
 		void template_t::write(std::ostream& /* o */) {
 		}
 
-		base_ptr view_t::add_template(const expr::name& name, const expr::param_list& arguments) {
+		base_ptr view_t::add_template(const expr::name& name, size_t line, const expr::param_list& arguments) {
 			return templates.emplace(
-				*name, std::make_shared<template_t>(name, arguments, shared_from_this())
+				*name, std::make_shared<template_t>(name, line, arguments, shared_from_this())
 			).first->second;
 		}
-		view_t::view_t(const expr::name& name, const expr::identifier& data, const expr::name& master, base_ptr parent)
-			: base_t("view", true, parent)
+		view_t::view_t(const expr::name& name, size_t line, const expr::identifier& data, const expr::name& master, base_ptr parent)
+			: base_t("view", line, true, parent)
 			, name_(name)
 			, master_(master) 
 			, data_(data) {}
@@ -1741,8 +1749,8 @@ namespace cppcms { namespace templates {
 			o << p << "}\n";
 		}
 			
-		has_children::has_children(const std::string& sysname, bool block, base_ptr parent) 
-			: base_t(sysname, block, parent) {}
+		has_children::has_children(const std::string& sysname, size_t line, bool block, base_ptr parent) 
+			: base_t(sysname, line, block, parent) {}
 			
 		void has_children::dump(std::ostream& o, int tabs) {
 			for(const base_ptr& child : children) 
@@ -1751,12 +1759,12 @@ namespace cppcms { namespace templates {
 		
 		void has_children::write(std::ostream& /* o */) {}
 
-		template_t::template_t(const expr::name& name, const expr::param_list& arguments, base_ptr parent) 
-			: has_children("template", true, parent)
+		template_t::template_t(const expr::name& name, size_t line, const expr::param_list& arguments, base_ptr parent) 
+			: has_children("template", line, true, parent)
 	       		, name_(name) 
 			, arguments_(arguments) {}
 
-		base_ptr template_t::end(const std::string& what) {
+		base_ptr template_t::end(const std::string& what,size_t) {
 			if(what.empty() || what == "template") {
 				return parent();
 			} else {
@@ -1772,8 +1780,8 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		cppcode_t::cppcode_t(const expr::cpp& code, base_ptr parent)
-			: base_t("c++", false, parent)
+		cppcode_t::cppcode_t(const expr::cpp& code, size_t line, base_ptr parent)
+			: base_t("c++", line, false, parent)
 			, code_(code) {}
 
 		void cppcode_t::dump(std::ostream& o, int tabs) {
@@ -1784,12 +1792,12 @@ namespace cppcms { namespace templates {
 		void cppcode_t::write(std::ostream& /* o */) {
 		}
 
-		base_ptr cppcode_t::end(const std::string&) {
+		base_ptr cppcode_t::end(const std::string&,size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		variable_t::variable_t(const expr::variable& name, const std::vector<expr::filter>& filters, base_ptr parent)
-			: base_t("variable", false, parent)
+		variable_t::variable_t(const expr::variable& name, size_t line, const std::vector<expr::filter>& filters, base_ptr parent)
+			: base_t("variable", line, false, parent)
 			, name_(name)
 			, filters_(filters) {}
 
@@ -1806,18 +1814,19 @@ namespace cppcms { namespace templates {
 			}
 		}
 		
-		base_ptr variable_t::end(const std::string&) {
+		base_ptr variable_t::end(const std::string&,size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 
 		void variable_t::write(std::ostream& /* o */) {
 		}
 			
-		fmt_function_t::fmt_function_t(	const std::string& name, 
+		fmt_function_t::fmt_function_t(	const std::string& name,
+			       			size_t line,	
 						const expr::string& fmt, 
 						const using_options_t& uos, 
 						base_ptr parent) 
-			: base_t(name, false, parent)
+			: base_t(name, line, false, parent)
 			, name_(name)
 			, fmt_(fmt)
 			, using_options_(uos) {}
@@ -1842,19 +1851,20 @@ namespace cppcms { namespace templates {
 			}
 		}
 		
-		base_ptr fmt_function_t::end(const std::string&) {
+		base_ptr fmt_function_t::end(const std::string&,size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 
 		void fmt_function_t::write(std::ostream& /* o */) {
 		}
 		
-		ngt_t::ngt_t( 	const expr::string& singular, 
+		ngt_t::ngt_t(	size_t line,
+				const expr::string& singular, 
 				const expr::string& plural,
 				const expr::variable& variable,
 				const using_options_t& uos, 
 				base_ptr parent)
-			: base_t("ngt", false, parent)
+			: base_t("ngt", line, false, parent)
 			, singular_(singular)
 			, plural_(plural)
 			, variable_(variable) 
@@ -1880,17 +1890,17 @@ namespace cppcms { namespace templates {
 			}
 		}
 		
-		base_ptr ngt_t::end(const std::string&) {
+		base_ptr ngt_t::end(const std::string&, size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 
 		void ngt_t::write(std::ostream& /* o */) {
 		}
 			
-		include_t::include_t(	const expr::call_list& name, const expr::identifier& from, 
+		include_t::include_t(	const expr::call_list& name, size_t line, const expr::identifier& from, 
 					const expr::identifier& _using, const expr::variable& with, 
 					base_ptr parent) 
-			: base_t("include", false, parent) 
+			: base_t("include", line, false, parent) 
 			, name_(name)
 			, from_(from)
 			, using_(_using) 
@@ -1918,15 +1928,15 @@ namespace cppcms { namespace templates {
 			o << std::endl;
 		}
 		
-		base_ptr include_t::end(const std::string&) {
+		base_ptr include_t::end(const std::string&, size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 
 		void include_t::write(std::ostream& /* o */) {
 		}
 
-		form_t::form_t(const expr::name& style, const expr::variable& name, base_ptr parent)
-			: base_t("form", false, parent)
+		form_t::form_t(const expr::name& style, size_t line, const expr::variable& name, base_ptr parent)
+			: base_t("form", line, false, parent)
 			, style_(style)
 			, name_(name) {}
 		
@@ -1935,15 +1945,15 @@ namespace cppcms { namespace templates {
 			o << p << "form style = " << *style_ << " using variable " << *name_ << std::endl;
 		}
 		
-		base_ptr form_t::end(const std::string&) {
+		base_ptr form_t::end(const std::string&,size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 		
 		void form_t::write(std::ostream& /* o */) {
 		}
 		
-		csrf_t::csrf_t(const expr::name& style, base_ptr parent)
-			: base_t("csrf", false, parent)
+		csrf_t::csrf_t(size_t line, const expr::name& style, base_ptr parent)
+			: base_t("csrf", line, false, parent)
 			, style_(style) {}
 		
 		void csrf_t::dump(std::ostream& o, int tabs) {
@@ -1954,15 +1964,15 @@ namespace cppcms { namespace templates {
 				o << p << "csrf style = (default)\n";
 		}
 		
-		base_ptr csrf_t::end(const std::string&) {
+		base_ptr csrf_t::end(const std::string&,size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 		
 		void csrf_t::write(std::ostream& /* o */) {
 		}
 		
-		render_t::render_t(const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent)
-			: base_t("render", false, parent)
+		render_t::render_t(size_t line, const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent)
+			: base_t("render", line, false, parent)
 			, skin_(skin)
 			, view_(view)
 			, with_(with) {}
@@ -1983,15 +1993,15 @@ namespace cppcms { namespace templates {
 			o << " content\n";
 		}
 		
-		base_ptr render_t::end(const std::string&) {
+		base_ptr render_t::end(const std::string&,size_t) {
 			throw std::logic_error("end in non-block component");
 		}
 		
 		void render_t::write(std::ostream& /* o */) {
 		}
 			
-		using_t::using_t(const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent)
-			: has_children("using", true, parent)
+		using_t::using_t(size_t line, const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent)
+			: has_children("using", line, true, parent)
 			, id_(id)
 			, with_(with)
 			, as_(as) {}
@@ -2009,7 +2019,7 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		base_ptr using_t::end(const std::string& what) {
+		base_ptr using_t::end(const std::string& what,size_t) {
 			if(what.empty() || what == "using") {
 				return parent();
 			} else {
@@ -2021,33 +2031,33 @@ namespace cppcms { namespace templates {
 		}
 				
 		
-		if_t::condition_t::condition_t(type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent)
-			: has_children("condition", true, parent)
+		if_t::condition_t::condition_t(size_t line, type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent)
+			: has_children("condition", line, true, parent)
 			, type_(type)
 			, cond_(cond)
 			, variable_(variable) 
 			, negate_(negate) {}
 			
-		if_t::if_t(base_ptr parent)
-			: has_children("if", true, parent) {}
+		if_t::if_t(size_t line, base_ptr parent)
+			: has_children("if", line, true, parent) {}
 
-		base_ptr if_t::add_condition(type_t type, bool negate) {
+		base_ptr if_t::add_condition(size_t line, type_t type, bool negate) {
 			conditions_.emplace_back(
-				std::make_shared<condition_t>(type, expr::cpp(), expr::variable(), negate, shared_from_this())
+				std::make_shared<condition_t>(line, type, expr::cpp(), expr::variable(), negate, shared_from_this())
 			);
 			return conditions_.back();
 		}
 			
-		base_ptr if_t::add_condition(const type_t& type, const expr::variable& variable, bool negate) {
+		base_ptr if_t::add_condition(size_t line, const type_t& type, const expr::variable& variable, bool negate) {
 			conditions_.emplace_back(
-				std::make_shared<condition_t>(type, expr::cpp(), variable, negate, shared_from_this())
+				std::make_shared<condition_t>(line, type, expr::cpp(), variable, negate, shared_from_this())
 			);
 			return conditions_.back();
 		}
 			
-		base_ptr if_t::add_condition(const expr::cpp& cond, bool negate) {
+		base_ptr if_t::add_condition(size_t line, const expr::cpp& cond, bool negate) {
 			conditions_.emplace_back(
-				std::make_shared<condition_t>(type_t::if_cpp, cond, expr::variable(), negate, shared_from_this())
+				std::make_shared<condition_t>(line, type_t::if_cpp, cond, expr::variable(), negate, shared_from_this())
 			);
 			return conditions_.back();
 		}
@@ -2060,7 +2070,7 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		base_ptr if_t::end(const std::string&) {
+		base_ptr if_t::end(const std::string&,size_t) {
 			throw std::logic_error("unreachable code (or rather: bug)");
 		}
 		
@@ -2094,7 +2104,7 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		base_ptr if_t::condition_t::end(const std::string& what) {
+		base_ptr if_t::condition_t::end(const std::string& what,size_t) {
 			if(what.empty() || what == "if") {
 				return parent()->parent(); // this <- if_t <- if_parent, aka end if statement
 			} else {
@@ -2105,10 +2115,11 @@ namespace cppcms { namespace templates {
 		void if_t::condition_t::write(std::ostream& /* o */) {
 		}
 			
-		foreach_t::foreach_t(	const expr::name& name, const expr::identifier& as, 
+		foreach_t::foreach_t(	size_t line, 
+					const expr::name& name, const expr::identifier& as, 
 					const expr::name& rowid, const int from,
 					const expr::variable& array, bool reverse, base_ptr parent) 
-			: base_t("foreach", true, parent) 
+			: base_t("foreach", line, true, parent) 
 			, name_(name)
 			, as_(as)
 			, rowid_(rowid)
@@ -2167,20 +2178,20 @@ namespace cppcms { namespace templates {
 			o << p << "}\n";
 		}
 		
-		base_ptr foreach_t::end(const std::string&) {
+		base_ptr foreach_t::end(const std::string&,size_t) {
 			throw std::logic_error("unreachable code (or rather: bug)");
 		}
 		
 		void foreach_t::write(std::ostream& /* o */) {}
 
-		foreach_t::part_t::part_t(const std::string& sysname, bool has_end, base_ptr parent) 
-			: has_children(sysname, true, parent)
+		foreach_t::part_t::part_t(size_t line, const std::string& sysname, bool has_end, base_ptr parent) 
+			: has_children(sysname, line, true, parent)
 			, has_end_(has_end) {}
 
-		base_ptr foreach_t::part_t::end(const std::string& what) {
+		base_ptr foreach_t::part_t::end(const std::string& what, size_t line) {
 			if(has_end_) { // aka: it is 'item'
 				if(what.empty() || what == sysname()) {
-					return parent()->as<foreach_t>().suffix();
+					return parent()->as<foreach_t>().suffix(line);
 				} else {
 					throw std::runtime_error("expected 'end " + sysname() + "', not 'end '" + what + "'");
 				}
@@ -2194,45 +2205,45 @@ namespace cppcms { namespace templates {
 		}
 
 
-		base_ptr foreach_t::prefix() {
+		base_ptr foreach_t::prefix(size_t line) {
 			if(!item_prefix_)
-				item_prefix_ = std::make_shared<part_t>("item_prefix", false, shared_from_this());
+				item_prefix_ = std::make_shared<part_t>(line, "item_prefix", false, shared_from_this());
 			return item_prefix_;
 		}
 		
-		base_ptr foreach_t::suffix() {
+		base_ptr foreach_t::suffix(size_t line) {
 			if(!item_suffix_)
-				item_suffix_ = std::make_shared<part_t>("item_suffix", false, shared_from_this());
+				item_suffix_ = std::make_shared<part_t>(line, "item_suffix", false, shared_from_this());
 			return item_suffix_;
 		}
 		
-		base_ptr foreach_t::empty() {
+		base_ptr foreach_t::empty(size_t line) {
 			if(!empty_)
-				empty_ = std::make_shared<part_t>("item_empty", false, shared_from_this());
+				empty_ = std::make_shared<part_t>(line, "item_empty", false, shared_from_this());
 			return empty_;
 		}
-		base_ptr foreach_t::separator() {
+		base_ptr foreach_t::separator(size_t line) {
 			if(!separator_)
-				separator_ = std::make_shared<part_t>("item_separator", false, shared_from_this());
+				separator_ = std::make_shared<part_t>(line, "item_separator", false, shared_from_this());
 			return separator_;
 		}
-		base_ptr foreach_t::item() {
+		base_ptr foreach_t::item(size_t line) {
 			if(!item_)
-				item_ = std::make_shared<part_t>("item", true, shared_from_this());
+				item_ = std::make_shared<part_t>(line, "item", true, shared_from_this());
 			return item_;
 		}
 			
-		cache_t::cache_t(	const expr::ptr& name, const expr::variable& miss, 
+		cache_t::cache_t(	size_t line, const expr::ptr& name, const expr::variable& miss, 
 					int duration, bool recording, bool triggers, base_ptr parent) 
-			: has_children("cache", true, parent) 
+			: has_children("cache", line, true, parent) 
 			, name_(name)
 			, miss_(miss)
 			, duration_(duration)
 			, recording_(recording)
 			, triggers_(triggers) {}
 			
-		base_ptr cache_t::add_trigger(const expr::ptr& t) {
-			trigger_list_.emplace_back(t);
+		base_ptr cache_t::add_trigger(size_t line, const expr::ptr& t) {
+			trigger_list_.emplace_back(trigger_t { line, t });
 			return shared_from_this();
 		}
 		
@@ -2249,8 +2260,8 @@ namespace cppcms { namespace templates {
 				o << " - no triggers\n";
 			} else { 
 				o << " - triggers [\n";
-				for(const expr::ptr& trigger : trigger_list_)
-					o << p << "\t" << *trigger << std::endl;
+				for(const trigger_t& trigger : trigger_list_)
+					o << p << "\t" << *trigger.ptr << std::endl;
 				o << p << "]\n";
 			}
 			o << p << "cache children = [\n";
@@ -2263,7 +2274,7 @@ namespace cppcms { namespace templates {
 		void cache_t::write(std::ostream& /* o */) {
 		}
 		
-		base_ptr cache_t::end(const std::string& what) {
+		base_ptr cache_t::end(const std::string& what,size_t) {
 			if(what.empty() || what == "cache") {
 				return parent();
 			} else {
