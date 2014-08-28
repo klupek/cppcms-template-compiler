@@ -1,0 +1,3 @@
+#!/bin/bash
+
+rm -r parser core.* tests/*.expected* tests/*~
