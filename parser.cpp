@@ -14,11 +14,19 @@ namespace cppcms { namespace templates {
 		ln(file_position_t line) : line_(line) {}
 	};
 
-	std::ostream& operator<<(std::ostream&o, const ln& obj) {
+	error_at_line::error_at_line(const std::string& msg, const file_position_t& line)
+		: std::runtime_error(msg)
+		, line_(line) {}  
+
+	const file_position_t& error_at_line::line() const {
+		return line_;
+	}
+
+	static std::ostream& operator<<(std::ostream&o, const ln& obj) {
 		return o << "#line " << obj.line_.line << " \"" << obj.line_.filename << "\"\n";
 	}
 
-	std::string trim(const std::string& input) {
+	static std::string trim(const std::string& input) {
 		size_t beg = 0, end = input.length();
 		
 		while(beg < input.length() && std::isspace(input[beg]))
@@ -29,7 +37,7 @@ namespace cppcms { namespace templates {
 		return std::string(&input[beg], &input[end]);
 	}
 
-	bool is_whitespace_string(const std::string& input) {
+	static bool is_whitespace_string(const std::string& input) {
 		return std::all_of(input.begin(), input.end(), [](char c) {
 			return std::isspace(c);
 		});
@@ -144,7 +152,7 @@ namespace cppcms { namespace templates {
 		return result;
 	}
 
-	expr::ptr recognize_expr(const std::string& input) {
+	static expr::ptr recognize_expr(const std::string& input) {
 		const std::string trimmed = trim(input);
 		if(trimmed[0] == '"')
 			return expr::make_string(trimmed);
@@ -158,7 +166,7 @@ namespace cppcms { namespace templates {
 			return expr::make_variable(trimmed);
 	}
 
-	std::pair<std::string, std::vector<expr::ptr>> split_function_call(const std::string& call) {
+	static std::pair<std::string, std::vector<expr::ptr>> split_function_call(const std::string& call) {
 		typedef std::pair<std::string, std::vector<expr::ptr>> result_t;
 		result_t result;
 		size_t beg = call.find("("), end = call.length();
@@ -759,6 +767,19 @@ namespace cppcms { namespace templates {
 		throw std::runtime_error("Parse error at position " + boost::lexical_cast<std::string>(source_.index()) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
 	}
 
+	void parser::raise_at_line(const file_position_t& file, const std::string& msg) {
+		const int context = 70;
+		const size_t orig_index = source_.index();
+		while(source_.line().line > file.line) // TODO: make a function for it
+			source_.move(-1);
+		while(source_.line().line < file.line)
+			source_.move(1);
+		const std::string left = source_.left_context(context);
+		const std::string right = source_.right_context(context);
+		source_.move_to(orig_index);
+		throw std::runtime_error("Error at position " + boost::lexical_cast<std::string>(source_.index()) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
+	}
+
 	bool parser::failed() const {
 		return failed_ != 0;
 	}	
@@ -824,6 +845,14 @@ namespace cppcms { namespace templates {
 		return tree_;
 	}
 
+	void template_parser::write(generator::context& context, std::ostream& o) {
+		try {
+			tree()->write(context, o);
+		} catch(const cppcms::templates::error_at_line& e) {
+			p.raise_at_line(e.line(), e.what());
+		}
+	}
+
 	void template_parser::parse() {
 		try {
 			while(!p.finished() && !p.failed()) {
@@ -867,6 +896,8 @@ namespace cppcms { namespace templates {
 				}
 				p.pop();
 			}
+		} catch(const error_at_line& e) {
+			p.raise_at_line(e.line(), e.what());
 		} catch(const std::bad_cast&) {
 			std::string current_path = current_->sysname();
 			for(auto i = current_->parent(); i && i != i->parent(); i = i->parent())
@@ -1646,7 +1677,7 @@ namespace cppcms { namespace templates {
 			: base_t("root", file_position_t{"__root__", 0}, true, nullptr)		
  			, current_skin(skins.end()) {}
 
-		base_ptr root_t::add_skin(const expr::name& name, file_position_t line) {
+		base_ptr root_t::add_skin(const expr::name& name, file_position_t line) {			
 			current_skin = skins.emplace( *name, skin_t { line, line, view_set_t() } ).first;
 			return shared_from_this();
 		}
@@ -1692,36 +1723,62 @@ namespace cppcms { namespace templates {
 			for(const code_t& code : codes) {
 				o << ln(code.line) << code.code << std::endl;
 			}
-
+			auto i = skins.find(expr::name_t("__default__"));
+			if(i != skins.end()) {
+				if(context.skin.empty()) {
+					throw error_at_line("Requested default skin name, but none was provided in arguments", i->second.line);
+				} else {
+					skins[expr::name_t(context.skin)] = i->second;
+				}
+				skins.erase(i);
+			}
 			for(const skins_t::value_type& skin : skins) {
+				if(!context.skin.empty() && context.skin != skin.first.repr())
+					throw error_at_line("Mismatched skin names, in argument and template source", skin.second.line);
 				o << ln(skin.second.line);
 				o << "namespace " << skin.first.repr() << " {\n";
-				context.skin = skin.first.repr();
+				context.current_skin = skin.first.repr();
 				for(const view_set_t::value_type& view : skin.second.views) {
 					view.second->write(context, o);
 				}
 				o << ln(skin.second.endline);
-				o << "} // end of namespace " << skin.first << "\n";
-			}	       
+				o << "} // end of namespace " << skin.first.repr() << "\n";
+			}
+			file_position_t pll = skins.rend()->second.endline; // past last line
+			pll.line++;
+
+			for(const auto& skinpair : context.skins) {
+				o << "\n" << ln(pll) << "namespace {\n" << ln(pll) << "cppcms::views::generator my_generator;\n" << ln(pll) << "struct loader {";
+				o << ln(pll) << "loader() {\n" << ln(pll);			
+				o << "my_generator.name(\"" << skinpair.first << "\");\n";
+				for(const auto& view : skinpair.second.views) {
+					o << ln(pll) << "my_generator.add_view< " << skinpair.first << "::" << view.name << ", " << view.data << " >(\"" << view.name << "\", true);\n";
+				}
+				o << ln(pll) << "cppcms::views::pool::instance().add(my_generator);\n";
+				o << ln(pll) << "}\n";
+				o << ln(pll) << "~loader() { cppcms::views::pool::instance().remove(my_generator); }\n";
+				o << ln(pll) << "} a_loader;\n";
+				o << ln(pll) << "} // anon \n";
+			}
 		}
 		
 		void view_t::write(generator::context& context, std::ostream& o) {
-			context.skins[context.skin].views.emplace_back( generator::context::view_t { name_->repr(), data_->repr() });
+			context.skins[context.current_skin].views.emplace_back( generator::context::view_t { name_->repr(), data_->repr() });
 			o << ln(line());
 			o << "struct " << name_->repr() << ":public ";
 			if(master_)
 				o << master_->repr();
 			else
 				o << "cppcms::base_view\n";
-			o << " {\n";
+			o << ln(line()) << " {\n";
 			
 			o << ln(line());
 			o << data_->repr() << " & content;\n";
 			
 			o << ln(line());
-			o << name_->repr() << "(std::ostream & _s, " << data_->repr() << " & _content):cppcms::base_view(_s),content(_content) {}\n";
+			o << name_->repr() << "(std::ostream & _s, " << data_->repr() << " & _content):cppcms::base_view(_s),content(_content)\n" << ln(line()) << "{\n" << ln(line()) << "}\n";
 
-			o << ln(endline_) << "};\n";
+			o << ln(endline_) << "}; // end of class " << name_->repr() << "\n";
 		}
 			
 		void root_t::dump(std::ostream& o, int tabs) {
@@ -2340,15 +2397,17 @@ namespace cppcms { namespace templates {
 #include <streambuf>
 #include <fstream>
 
-int main(int /*argc*/, char **argv) {
+int main(int argc, char **argv) {
 	cppcms::templates::template_parser p(argv[1]);
 	p.parse();
 	if(std::string(argv[2]) == "--ast")
 		p.tree()->dump(std::cout);
 	else {
 		cppcms::templates::generator::context ctx;
-		ctx.filename = "blah";
-		p.tree()->write(ctx, std::cout);
+		if(argc >= 4 && std::string(argv[3]) == "-s") {
+			ctx.skin = std::string(argv[4]);
+		}
+		p.write(ctx, std::cout);
 	}
 	return 0;
 }

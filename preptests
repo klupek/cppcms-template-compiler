@@ -1,0 +1,16 @@
+#!/bin/bash
+
+for f in tests/*.tmpl; do
+	name=$(basename "$f" .tmpl)
+	if [ ! -f tests/${name}.expected.cpp ]; then
+		arguments=""
+		if [ -f tests/${name}.args ]; then 
+			arguments=$(cat tests/${name}.args);
+		fi
+		cppcms_tmpl_cc $arguments -o tests/${name}.expected.cpp $f 
+	       	indent -ut -kr tests/${name}.expected.cpp
+		echo "$name: prepared";
+	else
+		echo "$name: skipped"
+	fi
+done

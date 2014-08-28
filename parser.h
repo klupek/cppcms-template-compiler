@@ -15,6 +15,13 @@ namespace cppcms { namespace templates {
 		size_t line;
 	};
 
+	class error_at_line : public std::runtime_error {
+		const file_position_t line_;
+	public:
+		error_at_line(const std::string& msg, const file_position_t& line);
+		const file_position_t& line() const;
+	};
+
 	namespace expr {    
 		class base_t;	
 		class number_t;
@@ -169,7 +176,10 @@ namespace cppcms { namespace templates {
 			};
 
 			std::map<std::string, skin_t> skins;
-			std::string filename, skin;
+			std::string current_skin;
+
+			// configurables
+			std::string skin;
 		};
 	}
 
@@ -590,6 +600,7 @@ namespace cppcms { namespace templates {
 		operator bool() const;
 		parser& back(size_t n);
 		void raise(const std::string& msg);
+		void raise_at_line(const file_position_t& line, const std::string& msg);
 
 		details_t& details();
 
@@ -626,6 +637,7 @@ namespace cppcms { namespace templates {
 		void parse();
 
 		ast::root_ptr tree();
+		void write(generator::context& context, std::ostream& o);
 	private:
 		bool try_flow_expression();
 		bool try_global_expression();
@@ -659,6 +671,11 @@ namespace cppcms { namespace templates {
  * 		additional form rendering engines should be registerable, 'form' NAME VARIABLE 
  * magic to do:
  * 	collapsing all-whitespace strings in add_html()
+ *
+ * compat to do:
+ * 	if skins.size() != 1 
+ * 		throw
+ * 	elif !context.skin.empty() skins.first()->name != context.skin
  */
 
 #endif
