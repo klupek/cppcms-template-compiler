@@ -1776,7 +1776,12 @@ namespace cppcms { namespace templates {
 			o << data_->repr() << " & content;\n";
 			
 			o << ln(line());
-			o << name_->repr() << "(std::ostream & _s, " << data_->repr() << " & _content):cppcms::base_view(_s),content(_content)\n" << ln(line()) << "{\n" << ln(line()) << "}\n";
+			o << name_->repr() << "(std::ostream & _s, " << data_->repr() << " & _content):";
+			if(master_)
+				o << master_->repr() << "(_s, _content)";
+			else 
+				o << "cppcms::base_view(_s)";
+			o << ",content(_content)\n" << ln(line()) << "{\n" << ln(line()) << "}\n";
 
 			o << ln(endline_) << "}; // end of class " << name_->repr() << "\n";
 		}
