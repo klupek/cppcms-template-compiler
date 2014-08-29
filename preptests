@@ -9,6 +9,7 @@ for f in tests/*.tmpl; do
 		fi
 		cppcms_tmpl_cc $arguments -o tests/${name}.expected.cpp $f 
 		perl -e 'local $/ = undef; local $string = <>; while($string =~ m/".+?"\s+"/) { $string =~ s:(".+?)"\s+":$1:gsm; } print $string' tests/${name}.expected.cpp > tests/${name}.expected.cpp.new &&  mv tests/${name}.expected.cpp{.new,}
+		perl -pe 's:\\":\\x22:g' -i tests/${name}.expected.cpp
 	       	indent -ut -kr tests/${name}.expected.cpp
 		echo "$name: prepared";
 	else

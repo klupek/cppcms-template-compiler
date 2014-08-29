@@ -1,0 +1,23 @@
+<% skin myskin %> 
+	<% view master uses data::master %>  
+		<% template menu() %>  
+			<li><a href="#1">Main</a></li>  
+			<li><a href="#2">Products</a></li>  
+		<% end template %>  
+		<% template render() %>  
+			<ul><% include menu() %></ul>  
+		<% end template %>  
+	<% end view %>  
+	<% view sales uses data::sales extends master %>  
+		<% template menu() %>  
+			<% include master::menu() %>  
+			<li><a href="#3">Orders</a></li>  
+		<% end %>  
+		<% template test() %>
+			<% include title() %>  
+			<% include parent::foo() %>  
+			<% include bar(x,"test",-1.1) from foo %>  
+			<% include bar(x,"test",-1.2) using baz %>  
+		<% end %>
+	<% end %>   
+<% end %>  

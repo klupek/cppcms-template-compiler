@@ -21,6 +21,27 @@ namespace cppcms { namespace templates {
 		error_at_line(const std::string& msg, const file_position_t& line);
 		const file_position_t& line() const;
 	};
+	
+	namespace generator {
+		struct context {
+			struct view_t { 
+				const std::string name, data;
+			};
+			struct skin_t {
+				std::vector< view_t > views;
+			};
+
+			std::map<std::string, skin_t> skins;
+			std::string current_skin;
+
+			// semi configurables
+			std::string variable_prefix;
+
+			// configurables
+			std::string skin;
+		};
+	}
+
 
 	namespace expr {    
 		class base_t;	
@@ -104,12 +125,12 @@ namespace cppcms { namespace templates {
 		public:
 			using base_t::base_t;
 			virtual std::string repr() const;
-			std::string prefixed(const std::string& prefix) const;
+			std::string code(generator::context&) const;
 		};
 		
 		class string_t : public base_t {
 		public:
-			using base_t::base_t;
+			string_t(const std::string&);
 			std::string repr() const;
 			virtual std::string unescaped() const;
 		};
@@ -132,7 +153,7 @@ namespace cppcms { namespace templates {
 		public:
 			call_list_t(const std::string& expr); 
 			std::string repr() const;
-			std::string code(const std::string& function_prefix, const std::string argument) const;
+			std::string code(generator::context& context, const std::string& function_prefix = std::string(), const std::string argument = std::string()) const;
 		};
 		
 		class param_list_t : public base_t {
@@ -148,7 +169,7 @@ namespace cppcms { namespace templates {
 			using call_list_t::call_list_t;
 			filter_t(const std::string&);		
 			bool is_exp() const;
-			std::string code(const std::string& function_prefix, const std::string& content_prefix, const std::string argument) const;
+			std::string code(generator::context& context, const std::string argument) const;
 		};
 
 		class cpp_t : public base_t { 
@@ -172,23 +193,6 @@ namespace cppcms { namespace templates {
 		std::ostream& operator<<(std::ostream& o, const base_t& obj);		
 	}
 	
-	namespace generator {
-		struct context {
-			struct view_t { 
-				const std::string name, data;
-			};
-			struct skin_t {
-				std::vector< view_t > views;
-			};
-
-			std::map<std::string, skin_t> skins;
-			std::string current_skin;
-
-			// configurables
-			std::string skin;
-		};
-	}
-
 	namespace ast {
 
 		class base_t;
@@ -680,6 +684,9 @@ namespace cppcms { namespace templates {
  * 	if skins.size() != 1 
  * 		throw
  * 	elif !context.skin.empty() skins.first()->name != context.skin
+ *  
+ *  checks:
+ *  	check if include() functions exists
  */
 
 #endif

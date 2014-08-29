@@ -71,11 +71,11 @@ namespace cppcms { namespace templates {
 				char o1,o2,o3;
 				switch(current) {					
 					case '\'':
-					case '"':
 					case '?':
 					case '\\':
 						result += current;
 						break;
+					case '"': result += "\\x22"; break;
 					case 'a': result += '\a'; break;
 					case 'b': result += '\b'; break;
 					case 'f': result += '\f'; break;
@@ -152,6 +152,41 @@ namespace cppcms { namespace templates {
 			}
 		}
 		return result;
+	}
+	
+	static std::string compress_string(const std::string& input) {
+		std::string result = "\"";
+		char translate[255] = { 0 };
+		translate[static_cast<unsigned int>('\a')] = 'a';
+		translate[static_cast<unsigned int>('\b')] = 'b'; 
+		translate[static_cast<unsigned int>('\f')] = 'f';
+		translate[static_cast<unsigned int>('\n')] = 'n';
+		translate[static_cast<unsigned int>('\r')] = 'r';
+		translate[static_cast<unsigned int>('\t')] = 't';
+		translate[static_cast<unsigned int>('\v')] = 'v';
+		const char hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+		for(size_t i = 1; i < input.length()-1; ++i) {
+			const char c = input[i];
+			if(c == '\\' && input[i+1] == '"') {
+				result += "\\x22";
+				++i;
+			} else if(std::isprint(c)) {
+				result += c;
+			} else if(translate[static_cast<int>(c)] > 0) {
+				result += '\\';
+				result += translate[static_cast<unsigned char>(c)];
+			} else if(c == '\'' || c == '"' || c == '\\') {
+				result += '\\';
+				result += c;
+			} else {
+				result += '\\';
+				result += 'x';
+				result += hex[static_cast<unsigned char>(c)/16];
+				result += hex[static_cast<unsigned char>(c)%16];
+			}
+		}
+		result += '"';
+		return result;		
 	}
 
 	static expr::ptr recognize_expr(const std::string& input) {
@@ -1515,29 +1550,34 @@ namespace cppcms { namespace templates {
 				
 		bool filter_t::is_exp() const { return exp_; }
 			
-		std::string filter_t::code(const std::string& function_prefix, const std::string& content_prefix, const std::string argument) const {
+		std::string filter_t::code(generator::context& context, const std::string argument) const {
 			if(exp_) {
-				return call_list_t::code(content_prefix, argument);
+				return call_list_t::code(context, context.variable_prefix, argument);
 			} else {
-				return call_list_t::code(function_prefix, argument);
+				return call_list_t::code(context, "cppcms::filters::", argument);
 			}
 		}
 
-		std::string call_list_t::code(const std::string& function_prefix, const std::string argument) const {
+		std::string call_list_t::code(generator::context& context,const std::string& function_prefix, const std::string argument) const {
 			std::ostringstream oss;
-			oss << function_prefix << value_ << "(";
-			oss << argument;
-			for(const ptr& x : arguments_)
-				oss << ", " << x->repr();
-			oss << ")";
-			return oss.str();
+			oss << function_prefix << value_ << "(  ";
+			if(!argument.empty())
+				oss << argument << ", ";
+			for(const ptr& x : arguments_) {
+				if(x->is_a<expr::variable_t>())
+					oss << x->as<expr::variable_t>().code(context) << ", ";
+				else
+					oss << x->repr() << ", ";
+			}
+			const std::string result = oss.str();
+			return result.substr(0, result.length()-2) + ")";
 		}
 
-		std::string variable_t::prefixed(const std::string& prefix) const {
+		std::string variable_t::code(generator::context& context) const {
 			if(value_[0] == '*')
-				return "*" + prefix + value_.substr(1);
+				return "*" + context.variable_prefix + value_.substr(1);
 			else
-				return prefix + value_;
+				return context.variable_prefix + value_;
 		}
 
 		std::string string_t::repr() const { 
@@ -1564,6 +1604,10 @@ namespace cppcms { namespace templates {
 		std::string string_t::unescaped() const {
 			return decode_escaped_string(value_);
 		}
+			
+		string_t::string_t(const std::string& in) 
+			: base_t(compress_string(in)) {}
+
 		std::string name_t::repr() const {
 			return value_;
 		}
@@ -1983,15 +2027,13 @@ namespace cppcms { namespace templates {
 
 		std::string variable_t::code(generator::context& context, const std::string& escaper) const {
 			const std::string escape = escaper + "(";
-			const std::string prefix = "content.";
-			const std::string filter_prefix = "cppcms::filters::";
 			if(filters_.empty()) {				
-				return escape + name_->prefixed(prefix) + ")";
+				return escape + name_->code(context) + ")";
 			} else {
-				std::string current = name_->prefixed(prefix);
+				std::string current = name_->code(context);
 				for(auto i = filters_.rbegin(); i != filters_.rend(); ++i) {
 					expr::filter filter = *i;
-					current = filter->code(filter_prefix, prefix, current);
+					current = filter->code(context, current);
 				}
 				return current;
 			}
@@ -2092,12 +2134,12 @@ namespace cppcms { namespace templates {
 				o << "out() << " << function_name << "(" 
 					<< singular_->repr() << ", " 
 					<< plural_->repr() << ", " 
-					<< variable_->prefixed("content.") << ");\n";
+					<< variable_->code(context) << ");\n";
 			} else {
 				o << "out() << cppcms::locale::format(" << function_name << "(" 
 					<< singular_->repr() << ", " 
 					<< plural_->repr() << ", "
-					<< variable_->prefixed("content.") << ")) ";
+					<< variable_->code(context) << ")) ";
 				for(const using_option_t& uo : using_options_) {
 					o << " % (" << uo.code(context) << ")";
 				}
@@ -2140,7 +2182,25 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void include_t::write(generator::context& context, std::ostream& /* o */) {
+		void include_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line());
+			if(from_) {
+				o << name_->code(context, from_->repr() + ".") << ";";
+			} else if(using_) {
+				o << "{\n" << ln(line()) << using_->repr() << " _using(out(), ";
+				if(with_) {
+					o << with_->code(context);
+				} else {
+					o << "content";
+				} 
+				o << ");\n";
+				o << ln(line());
+				o << "_using." << name_->code(context) << ";\n";
+				o << ln(line()) << "}";
+			} else {
+				o << name_->code(context) << ";";
+			}
+			o << "\n";
 		}
 
 		form_t::form_t(const expr::name& style, file_position_t line, const expr::variable& name, base_ptr parent)
@@ -2508,6 +2568,7 @@ int main(int argc, char **argv) {
 		p.tree()->dump(std::cout);
 	else {
 		cppcms::templates::generator::context ctx;
+		ctx.variable_prefix = "content.";
 		if(argc >= 4 && std::string(argv[3]) == "-s") {
 			ctx.skin = std::string(argv[4]);
 		}
