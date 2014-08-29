@@ -1639,7 +1639,7 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
-		std::string string_t::code(generator::context& context) const {
+		std::string string_t::code(generator::context&) const {
 			return value_;
 		}
 
@@ -1682,7 +1682,7 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
-		std::string name_t::code(generator::context& context) const {
+		std::string name_t::code(generator::context&) const {
 			return value_;
 		}
 		
@@ -2038,13 +2038,18 @@ namespace cppcms { namespace templates {
 		has_children::has_children(const std::string& sysname, file_position_t line, bool block, base_ptr parent) 
 			: base_t(sysname, line, block, parent)
 	       		, endline_(line)	{}
-			
+		
+		file_position_t has_children::endline() const { return endline_; }
 		void has_children::dump(std::ostream& o, int tabs)  const {
 			for(const base_ptr& child : children) 
 				child->dump(o, tabs);
 		}
 		
-		void has_children::write(generator::context& context, std::ostream& /* o */) {}
+		void has_children::write(generator::context& context, std::ostream& o) {
+			for(const base_ptr& child : children) {
+				child->write(context, o);
+			}
+		}
 
 		template_t::template_t(const expr::name& name, file_position_t line, const expr::param_list& arguments, base_ptr parent) 
 			: has_children("template", line, true, parent)
@@ -2365,7 +2370,7 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		void csrf_t::write(generator::context& context, std::ostream& o ) {
+		void csrf_t::write(generator::context&, std::ostream& o) {
 			if(!style_) {
 				o << ln(line()) << "out() << \"<input type=\\x22hidden\\x22 name=\\x22_csrf\\x22 value=\\x22\" << content.app().session().get_csrf_token() << \"\\x22 >\\n\"\n;";
 			} else if(style_->repr() == "token") {
@@ -2710,7 +2715,66 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("unreachable code (or rather: bug)");
 		}
 		
-		void foreach_t::write(generator::context& context, std::ostream& /* o */) {}
+		void foreach_t::write(generator::context& context, std::ostream& o) {
+			const std::string array = "(" + array_->code(context) + ")";
+			const std::string item = name_->code(context);
+			const std::string rowid = (rowid_ ? rowid_->code(context) : "__rowid");
+			const std::string type = (as_ ? as_->code(context) : ("CPPCMS_TYPEOF(" + array + ".begin())"));
+			const std::string vtype = (as_ ? ("std::iterator_traits <" + type + " >::value_type") : ("CPPCMS_TYPEOF(*" + item + "_ptr)"));
+
+			o << ln(line());
+			o << "if(" << array << ".begin() != " << array << ".end()) {\n";
+			if(rowid_) {
+				o << ln(line()) << "int " << rowid << " = 1;\n";
+			}
+			if(item_prefix_)
+				item_prefix_->write(context, o);
+
+			o << ln(item_->line());
+			o << "for (" <<  type << " "<< item << "_ptr = " << array << ".begin(), " << item << "_ptr_end = " << array << ".end(); " 
+				<< item << "_ptr != " << item << "_ptr_end; ++" << item << "_ptr";
+			if(rowid_)
+				o << ", ++" << rowid << ") {\n";
+			else
+				o << ") {\n";
+
+			o << ln(item_->line());
+			o << vtype <<" & " << item << " = *" << item << "_ptr;\n";
+			
+			if(rowid_) 
+				context.scope_variables.insert(rowid);
+			context.scope_variables.insert(item);
+			if(separator_) {
+				o << ln(separator_->line());
+				o << "if(" << item << "_ptr != " << array << ".begin()) {\n";
+				separator_->write(context, o);
+				o << ln(separator_->endline()) << "} // end of separator\n";
+			}
+			item_->write(context, o);			
+
+			if(rowid_) 
+				context.scope_variables.erase(rowid);
+			context.scope_variables.erase(item);
+			o << ln(item_->endline()) << "} // end of item\n";
+
+			if(item_suffix_)
+				item_suffix_->write(context, o);
+
+			if(empty_) {
+				o << ln(empty_->line());
+				o << "} else {\n";
+				empty_->write(context, o);
+				o << ln(empty_->endline()) << "} // end of empty\n";
+
+			} else {
+				if(item_suffix_)
+					o << ln(item_suffix_->endline());
+				else 
+					o << ln(item_->endline());
+				o << "}\n";
+			}
+
+		}
 
 		foreach_t::part_t::part_t(file_position_t line, const std::string& sysname, bool has_end, base_ptr parent) 
 			: has_children(sysname, line, true, parent)
@@ -2724,10 +2788,14 @@ namespace cppcms { namespace templates {
 				} else {
 					throw std::runtime_error("expected 'end " + sysname() + "', not 'end '" + what + "'");
 				}
-			} else {
+			} else {				
 				if(what.empty() || what == "foreach") {
-					endline_ = line;
-					return parent()->parent(); // this <- foreach_t <- foreach parent
+					if(sysname() == "item_prefix") {
+						throw std::runtime_error("foreach without <% item %>");
+					} else {
+						endline_ = line;
+						return parent()->parent(); // this <- foreach_t <- foreach parent
+					}
 				} else {
 					throw std::runtime_error("expected 'end foreach', not 'end '" + what + "'");
 				}
@@ -2735,29 +2803,29 @@ namespace cppcms { namespace templates {
 		}
 
 
-		base_ptr foreach_t::prefix(file_position_t line) {
+		has_children_ptr foreach_t::prefix(file_position_t line) {
 			if(!item_prefix_)
 				item_prefix_ = std::make_shared<part_t>(line, "item_prefix", false, shared_from_this());
 			return item_prefix_;
 		}
 		
-		base_ptr foreach_t::suffix(file_position_t line) {
+		has_children_ptr foreach_t::suffix(file_position_t line) {
 			if(!item_suffix_)
 				item_suffix_ = std::make_shared<part_t>(line, "item_suffix", false, shared_from_this());
 			return item_suffix_;
 		}
 		
-		base_ptr foreach_t::empty(file_position_t line) {
+		has_children_ptr foreach_t::empty(file_position_t line) {
 			if(!empty_)
 				empty_ = std::make_shared<part_t>(line, "item_empty", false, shared_from_this());
 			return empty_;
 		}
-		base_ptr foreach_t::separator(file_position_t line) {
+		has_children_ptr foreach_t::separator(file_position_t line) {
 			if(!separator_)
 				separator_ = std::make_shared<part_t>(line, "item_separator", false, shared_from_this());
 			return separator_;
 		}
-		base_ptr foreach_t::item(file_position_t line) {
+		has_children_ptr foreach_t::item(file_position_t line) {
 			if(!item_)
 				item_ = std::make_shared<part_t>(line, "item", true, shared_from_this());
 			return item_;

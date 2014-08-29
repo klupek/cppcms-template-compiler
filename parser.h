@@ -214,11 +214,13 @@ namespace cppcms { namespace templates {
 		class view_t;
 		class root_t;
 		class template_t;
+		class has_children;
 
 		typedef std::shared_ptr<base_t> base_ptr;
 		typedef std::shared_ptr<view_t> view_ptr;
 		typedef std::shared_ptr<root_t> root_ptr;
 		typedef std::shared_ptr<template_t> template_ptr;
+		typedef std::shared_ptr<has_children> has_children_ptr;
 		
 		typedef base_t& base_ref;
 		typedef view_t& view_ref;
@@ -318,6 +320,7 @@ namespace cppcms { namespace templates {
 			file_position_t endline_;
 		public:
 			has_children(const std::string& sysname, file_position_t line, bool block, base_ptr parent);
+			file_position_t endline() const;
 
 			template<typename T, typename... Args>
 			base_ptr add(Args&&... args) { 
@@ -493,19 +496,19 @@ namespace cppcms { namespace templates {
 			const expr::variable array_;
 			const bool reverse_;
 
-			base_ptr empty_, separator_, item_;
-			base_ptr item_prefix_, item_suffix_;
+			has_children_ptr empty_, separator_, item_;
+			has_children_ptr item_prefix_, item_suffix_;
 		public:
 			foreach_t(file_position_t line, const expr::name& name, const expr::identifier& as, const expr::name& rowid, const int from, const expr::variable& array, bool reverse, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0) const;
 			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, file_position_t line);
 
-			base_ptr prefix(file_position_t line);
-			base_ptr empty(file_position_t line);
-			base_ptr separator(file_position_t line);
-			base_ptr item(file_position_t line);
-			base_ptr suffix(file_position_t line);
+			has_children_ptr prefix(file_position_t line);
+			has_children_ptr empty(file_position_t line);
+			has_children_ptr separator(file_position_t line);
+			has_children_ptr item(file_position_t line);
+			has_children_ptr suffix(file_position_t line);
 		};
 
 		class cache_t : public has_children {
