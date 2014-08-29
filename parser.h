@@ -104,6 +104,7 @@ namespace cppcms { namespace templates {
 		public:
 			using base_t::base_t;
 			virtual std::string repr() const;
+			std::string prefixed(const std::string& prefix) const;
 		};
 		
 		class string_t : public base_t {
@@ -131,6 +132,7 @@ namespace cppcms { namespace templates {
 		public:
 			call_list_t(const std::string& expr); 
 			std::string repr() const;
+			std::string code(const std::string& function_prefix, const std::string argument) const;
 		};
 		
 		class param_list_t : public base_t {
@@ -141,8 +143,12 @@ namespace cppcms { namespace templates {
 		};
 		
 		class filter_t : public call_list_t {
+			bool exp_;
 		public:
 			using call_list_t::call_list_t;
+			filter_t(const std::string&);		
+			bool is_exp() const;
+			std::string code(const std::string& function_prefix, const std::string& content_prefix, const std::string argument) const;
 		};
 
 		class cpp_t : public base_t { 

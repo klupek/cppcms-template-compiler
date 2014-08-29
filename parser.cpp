@@ -1499,6 +1499,46 @@ namespace cppcms { namespace templates {
 		std::string variable_t::repr() const {
 			return value_;
 		}
+		
+
+		const std::pair<std::string, bool> split_exp_filter(const std::string& input) {
+			const std::string ext("ext ");
+			if(input.compare(0, ext.length(), ext) == 0) {
+				return std::make_pair(input.substr(ext.length()), true);
+			} else {
+				return std::make_pair(input, false);
+			}
+		}
+		filter_t::filter_t(const std::string& input) 
+			: call_list_t(split_exp_filter(input).first)
+			, exp_(split_exp_filter(input).second) {}
+				
+		bool filter_t::is_exp() const { return exp_; }
+			
+		std::string filter_t::code(const std::string& function_prefix, const std::string& content_prefix, const std::string argument) const {
+			if(exp_) {
+				return call_list_t::code(content_prefix, argument);
+			} else {
+				return call_list_t::code(function_prefix, argument);
+			}
+		}
+
+		std::string call_list_t::code(const std::string& function_prefix, const std::string argument) const {
+			std::ostringstream oss;
+			oss << function_prefix << value_ << "(";
+			oss << argument;
+			for(const ptr& x : arguments_)
+				oss << ", " << x->repr();
+			oss << ")";
+			return oss.str();
+		}
+
+		std::string variable_t::prefixed(const std::string& prefix) const {
+			if(value_[0] == '*')
+				return "*" + prefix + value_.substr(1);
+			else
+				return prefix + value_;
+		}
 
 		std::string string_t::repr() const { 
 			return value_;
@@ -1941,7 +1981,22 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void variable_t::write(generator::context& context, std::ostream& /* o */) {
+		void variable_t::write(generator::context& context, std::ostream& o) {
+			const std::string escape = "cppcms::filters::escape(";
+			const std::string prefix = "content.";
+			const std::string filter_prefix = "cppcms::filters::";
+
+			o << ln(line());
+			if(filters_.empty()) {				
+				o << "out() << " << escape << name_->prefixed(prefix) << ");\n";
+			} else {
+				std::string current = name_->prefixed(prefix);
+				for(auto i = filters_.rbegin(); i != filters_.rend(); ++i) {
+					expr::filter filter = *i;
+					current = filter->code(filter_prefix, prefix, current);
+				}
+				o << "out() << " << current << ";\n";
+			}
 		}
 			
 		fmt_function_t::fmt_function_t(	const std::string& name,

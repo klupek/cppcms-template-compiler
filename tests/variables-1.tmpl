@@ -1,0 +1,15 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			message: <%= message %>
+			property: <%= some_property() %>
+			something strange: <%= *foo->bar.baz() %>
+			birthday: <%= birthday | strftime("%d/%m/%Y") %> 
+			birthday url encoded: <%= birthday | strftime("%d %m %Y") | urlencode %>  
+			ready html: <%= ready_html | raw %>  
+			message ext: <%= message | ext bbcode %>  
+		<% end template %>
+	<% end view %> 
+	<% view page uses data::page extends master %>
+	<% end view %>  
+<% end %>  
