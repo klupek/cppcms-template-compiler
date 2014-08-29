@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <memory>
 #include <map>
+#include <set>
 #include <boost/lexical_cast.hpp>
 
 namespace cppcms { namespace templates {
@@ -34,9 +35,10 @@ namespace cppcms { namespace templates {
 			std::map<std::string, skin_t> skins;
 			std::string current_skin;
 
-			// semi configurables
-			std::stack<std::string> variable_prefixes;
+			// runtime state (with loadable defaults)
+			std::string variable_prefix;
 			std::string output_mode;
+			std::set<std::string> scope_variables;
 
 			// configurables
 			std::string skin;

@@ -16,8 +16,12 @@
 		<% template test() %>
 			<% include title() %>  
 			<% include parent::foo() %>  
-			<% include bar(x,"test",-1.1) from foo %>  
-			<% include bar(x,"test",-1.2) using baz %>  
+			<% using foo_t as foo %>
+				<% include bar(x,"test",-1.1) from foo %>  	
+			<% end %>
+			<% using baz_t as baz %>
+				<% include bar(x,"test",-1.2) using baz %>  
+			<% end %>
 		<% end %>
 	<% end %>   
 <% end %>  

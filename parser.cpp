@@ -1583,7 +1583,7 @@ namespace cppcms { namespace templates {
 		std::string call_list_t::code(generator::context& context) const {
 			std::ostringstream oss;
 			if(function_prefix_ == "$var")
-				oss << context.variable_prefixes.top() << value_ << "(  ";
+				oss << context.variable_prefix << value_ << "(  ";
 			else
 				oss << function_prefix_ << value_ << "(  ";
 			if(!current_argument_.empty())
@@ -1599,10 +1599,25 @@ namespace cppcms { namespace templates {
 		}
 
 		std::string variable_t::code(generator::context& context) const {
-			if(value_[0] == '*')
-				return "*" + context.variable_prefixes.top() + value_.substr(1);
-			else
-				return context.variable_prefixes.top() + value_;
+			size_t name_beg = 0, name_end;
+			bool deref = false;
+			if(value_[name_beg] == '*') {
+				name_beg++;
+				deref = true;
+			}
+			for(name_end = name_beg+1; name_end < value_.length() && 
+					value_[name_end] != '-' && 
+					value_[name_end] != '.' && 
+					value_[name_end] != '('; ++name_end);
+			std::string varname = value_.substr(name_beg, name_end-name_beg);
+			const std::string right_of_varname = value_.substr(name_end);
+
+			
+			if(context.scope_variables.find(varname) == context.scope_variables.end()) {
+				// variable not in local scope, so prefix it with content.
+				varname = "content." + varname;
+			}
+			return (deref ? "*" : "") + varname + right_of_varname;
 		}
 
 		std::string string_t::repr() const { 
@@ -2236,9 +2251,16 @@ namespace cppcms { namespace templates {
 		void include_t::write(generator::context& context, std::ostream& o) {
 			o << ln(line());
 			if(from_) {
+				if(context.scope_variables.find(from_->code(context)) == context.scope_variables.end()) {
+					throw error_at_line("No local view variable " + from_->code(context) + " found in context.", line());
+				}
 				o << name_->code(context) << ";";
 			} else if(using_) {
-				o << "{\n" << ln(line()) << using_->code(context) << " _using(out(), ";
+				o << "{\n";
+				if(with_) {
+					o << ln(line()) << "cppcms::base_content::app_guard _g(" << with_->code(context) << ", content);\n";
+				}
+				o << ln(line()) << using_->code(context) << " _using(out(), ";
 				if(with_) {
 					o << with_->code(context);
 				} else {
@@ -2430,7 +2452,24 @@ namespace cppcms { namespace templates {
 			}
 		}
 		
-		void using_t::write(generator::context& context, std::ostream& /* o */) {
+		void using_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line()) << "{\n";
+			if(with_) {
+				o << ln(line()) << "cppcms::base_content::app_guard _g(" << with_->code(context) << ", content);\n";
+			}
+			o << ln(line()) << id_->code(context) << " " << as_->code(context) << "(out(), ";
+			if(with_) {
+				o << with_->code(context);
+			} else {
+				o << "content";
+			}
+			o << ");\n";
+			context.scope_variables.insert(as_->code(context));
+			for(const base_ptr& child : children) {
+				child->write(context, o);
+			}
+			context.scope_variables.erase(as_->code(context));
+			o << ln(endline_) << "}\n";
 		}
 				
 		
@@ -2702,7 +2741,7 @@ int main(int argc, char **argv) {
 		p.tree()->dump(std::cout);
 	else {
 		cppcms::templates::generator::context ctx;
-		ctx.variable_prefixes.push("content.");
+		ctx.variable_prefix = "content."; // TODO: load defaults
 		if(argc >= 4 && std::string(argv[3]) == "-s") {
 			ctx.skin = std::string(argv[4]);
 		}

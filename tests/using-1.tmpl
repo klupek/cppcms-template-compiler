@@ -1,0 +1,22 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			<% using foo as bar %>  
+				<% include baz() from bar %>  
+				<% include beep(10) from bar %>  
+			<% end using %> 
+			<% using foo with some_content as bar %>  
+				<% include baz() from bar %>  
+				<% include beep(10) from bar %>  
+			<% end using %> 
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			<% include baz() using foo with some_content %> 
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+			<% using foo with some_content as _some_variable %>  
+				<% include baz() from _some_variable %>  
+			<% end using %>  
+		<% end template %>
+	<% end view %> 
+<% end %>  
