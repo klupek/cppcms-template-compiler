@@ -884,6 +884,9 @@ namespace cppcms { namespace templates {
 
 	void template_parser::write(generator::context& context, std::ostream& o) {
 		try {
+			context.output_mode = tree()->mode();
+			if(context.output_mode.empty())
+				context.output_mode = "html"; // TODO: context.load_defaults()
 			tree()->write(context, o);
 		} catch(const cppcms::templates::error_at_line& e) {
 			p.raise_at_line(e.line(), e.what());
@@ -1394,10 +1397,13 @@ namespace cppcms { namespace templates {
 			std::cout << "\twith " << (with.empty() ? "(current)" : with) << std::endl;
 			std::cout << "\tas " << as << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]
+		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]			
 			const expr::name name = expr::make_name(p.get(-5));
 			const expr::variable var = expr::make_variable(p.get(-3));
-			current_ = current_->as<ast::has_children>().add<ast::form_t>(name, p.line(), var);
+			if(name->repr() == "end")
+				current_ = current_->end("form", p.line());
+			else
+				current_ = current_->as<ast::has_children>().add<ast::form_t>(name, p.line(), var);
 #ifdef PARSER_TRACE
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 #endif
@@ -2249,7 +2255,7 @@ namespace cppcms { namespace templates {
 		}
 
 		form_t::form_t(const expr::name& style, file_position_t line, const expr::variable& name, base_ptr parent)
-			: base_t("form", line, false, parent)
+			: has_children("form", line, ( style && ( style->repr() == "block" || style->repr() == "begin")), parent)
 			, style_(style)
 			, name_(name) {}
 		
@@ -2258,11 +2264,46 @@ namespace cppcms { namespace templates {
 			o << p << "form style = " << *style_ << " using variable " << *name_ << std::endl;
 		}
 		
-		base_ptr form_t::end(const std::string&, file_position_t) {
-			throw std::logic_error("end in non-block component");
+		base_ptr form_t::end(const std::string& x, file_position_t) {
+			if((style_->repr() == "block" || style_->repr() == "begin") && ( x.empty() || x == "form" ))
+				return parent();
+			else
+				throw std::logic_error("end in non-block component");
 		}
 		
-		void form_t::write(generator::context& context, std::ostream& /* o */) {
+		void form_t::write(generator::context& context, std::ostream& o) {
+			const std::string mode = context.output_mode;
+			if(style_->repr() == "as_table" || style_->repr() == "as_p" || 
+					style_->repr() == "as_ul" || style_->repr() == "as_dl" ||
+					style_->repr() == "as_space") {
+				o << ln(line()) << "{ ";
+				o << "cppcms::form_context _form_context(out(), cppcms::form_flags::as_" << mode << ", cppcms::form_flags::" << style_->code(context) << "); ";
+				o << "(" << name_->code(context) << ").render(_form_context); ";
+				o << "}\n";
+			} else if(style_->repr() == "input") {
+				o << ln(line()) << " { ";
+				o << "cppcms::form_context _form_context(out(),cppcms::form_flags::as_" << mode << ");\n";
+				o << ln(line()) << "_form_context.widget_part(cppcms::form_context::first_part);\n";
+				o << ln(line()) << "(" << name_->code(context) << ").render_input(_form_context); ";
+				o << ln(line()) << "out() << (" << name_->code(context) << ").attributes_string();\n";
+				o << ln(line()) << "_form_context.widget_part(cppcms::form_context::second_part);\n";
+				o << ln(line()) << "(" << name_->code(context) << ").render_input(_form_context);\n";
+				o << ln(line()) << "}\n";
+			} else if(style_->repr() == "begin" || style_->repr() == "block") {
+				o << ln(line()) << " { ";
+				o << "cppcms::form_context _form_context(out(),cppcms::form_flags::as_" << mode << ");\n";
+				o << ln(line()) << "_form_context.widget_part(cppcms::form_context::first_part);\n";
+				o << ln(line()) << "(" << name_->code(context) << ").render_input(_form_context); ";
+				o << ln(line()) << "}\n";
+				for(const base_ptr& child : children) {
+					child->write(context, o);
+				}
+				o << ln(endline_) << " { ";
+				o << "cppcms::form_context _form_context(out(),cppcms::form_flags::as_" << mode << ");\n";
+				o << ln(endline_) << "_form_context.widget_part(cppcms::form_context::second_part);\n";
+				o << ln(endline_) << "(" << name_->code(context) << ").render_input(_form_context);\n";
+				o << ln(endline_) << "}\n";
+			}	
 		}
 		
 		csrf_t::csrf_t(file_position_t line, const expr::name& style, base_ptr parent)
@@ -2281,7 +2322,37 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		void csrf_t::write(generator::context& context, std::ostream& /* o */) {
+		void csrf_t::write(generator::context& context, std::ostream& o ) {
+			if(!style_) {
+				o << ln(line()) << "out() << \"<input type=\\x22hidden\\x22 name=\\x22_csrf\\x22 value=\\x22\" << content.app().session().get_csrf_token() << \"\\x22 >\\n\"\n;";
+			} else if(style_->repr() == "token") {
+				o << ln(line()) << "out() << content.app().session().get_csrf_token();\n";
+			} else if(style_->repr() == "script")  {
+				std::string jscode = R"javascript(                        out() << "\n"
+                                "            <script type='text/javascript'>\n"
+                                "            <!--\n"
+                                "                {\n"
+                                "                    var cppcms_cs = document.cookie.indexOf(\""<< content.app().session().get_csrf_token_cookie_name() <<"=\");\n"
+                                "                    if(cppcms_cs != -1) {\n"
+                                "                        cppcms_cs += '"<< content.app().session().get_csrf_token_cookie_name() <<"='.length;\n"
+                                "                        var cppcms_ce = document.cookie.indexOf(\";\",cppcms_cs);\n"
+                                "                        if(cppcms_ce == -1) {\n"
+                                "                            cppcms_ce = document.cookie.length;\n"
+                                "                        }\n"
+                                "                        var cppcms_token = document.cookie.substring(cppcms_cs,cppcms_ce);\n"
+                                "                        document.write('<input type=\"hidden\" name=\"_csrf\" value=\"' + cppcms_token + '\" >');\n"
+                                "                    }\n"
+                                "                }\n"
+                                "            -->\n"
+                                "            </script>\n"
+                                "            ";)javascript";
+				o << ln(line()) << jscode << "\n";
+			} else if(style_->repr() == "cookie") {
+				o << ln(line()) << "out() << content.app().session().get_csrf_token_cookie_name();\n";
+			} else {
+				throw std::logic_error("Invalid csrf style: " + style_->repr());
+			}
+
 		}
 		
 		render_t::render_t(file_position_t line, const expr::ptr& skin, const expr::ptr& view, const expr::variable& with, base_ptr parent)

@@ -9,6 +9,8 @@ for f in tests/*.tmpl; do
 			arguments=$(cat tests/${name}.args);
 		fi
 		./parser $f --code > tmp/${name}.cpp $arguments
+		perl join_strings.pl  tmp/${name}.cpp > tmp/${name}.cpp.new && mv tmp/${name}.cpp{.new,}
+		perl -pe 's:\\":\\x22:g' -i tmp/${name}.cpp
 		indent -ut -kr tmp/${name}.cpp
 		if diff -au tests/${name}.expected.cpp tmp/${name}.cpp; then
 			echo "$name: OK";

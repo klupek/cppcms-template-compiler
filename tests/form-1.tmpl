@@ -1,0 +1,30 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			<table>  
+			<% form as_table form.fields %>  
+			</table>  
+			<% form as_p form.fields %>  
+			<% form as_ul form.fields %>  
+			<% form as_dl form.fields %>  
+			<p><% form as_space form.submit_buttons %></p>  
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			<% form input some_button %>  
+			<% form begin some_button %> onclick="return foo()" <% form end some_button %>
+			<% form block some_button %> onclick="return foo()" <% end %> 
+			<input type="submit" name="<% button.name() %>" value="Press" /> ( <% button.help() %> )  
+			<% form as_p form.fields %>  
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+			<form method="post" action="/path/to"><% csrf %>  
+				<% form as_p my_form %> 
+				<% csrf script %> 
+				<% csrf token %> 
+				<% csrf cookie %> 
+			</form>  
+		<% end template %>
+	<% end view %> 
+	<% view page uses data::page extends master %>
+	<% end view %>  
+<% end %>  

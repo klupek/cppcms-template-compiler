@@ -36,6 +36,7 @@ namespace cppcms { namespace templates {
 
 			// semi configurables
 			std::stack<std::string> variable_prefixes;
+			std::string output_mode;
 
 			// configurables
 			std::string skin;
@@ -406,7 +407,7 @@ namespace cppcms { namespace templates {
 			virtual base_ptr end(const std::string& what, file_position_t line);
 		};
 
-		class form_t : public base_t {
+		class form_t : public has_children {
 			const expr::name style_;
 			const expr::variable name_;
 		public:
@@ -691,6 +692,10 @@ namespace cppcms { namespace templates {
  * 		additional form rendering engines should be registerable, 'form' NAME VARIABLE 
  * magic to do:
  * 	collapsing all-whitespace strings in add_html()
+ * 	form templates
+ * 		skin, view, blah, blah, 
+ * 		<% template (text,password,radio,checkbox,whatever)(all input options, including value, classes etc) %>
+ *
  *
  * compat to do:
  * 	if skins.size() != 1 
