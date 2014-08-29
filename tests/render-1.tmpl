@@ -1,0 +1,12 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %> 
+			<% render "foobar" %>
+			<% render foobar %> 
+			<% render "sidebar" with sidebar_data %>  
+			<% render sidebar with sidebar_data %>  
+			<% render skin_name, "sidebar" with sidebar_data %>   
+			<% render "skin_name", sidebar with sidebar_data %>   
+		<% end template %>
+	<% end view %> 
+<% end %>  

@@ -2381,7 +2381,25 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 		
-		void render_t::write(generator::context& context, std::ostream& /* o */) {
+		void render_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line()) << "{\n";
+			if(with_) {
+				o << ln(line());
+				o << "cppcms::base_content::app_guard _g(" << with_->code(context) << ", content);\n";
+			}
+			o << ln(line()) << "cppcms::views::pool::instance().render(";
+			if(skin_) {
+				o << skin_->code(context);
+			} else {
+				o << '"' << context.current_skin << '"';
+			}
+			o << ", " << view_->code(context) << ", out(), ";
+			if(with_)
+				o << with_->code(context);
+			else
+				o << "content";
+			o << ");\n";
+			o << ln(line()) << "}\n";
 		}
 			
 		using_t::using_t(file_position_t line, const expr::identifier& id, const expr::variable& with, const expr::identifier& as, base_ptr parent)
