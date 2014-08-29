@@ -35,7 +35,7 @@ namespace cppcms { namespace templates {
 			std::string current_skin;
 
 			// semi configurables
-			std::string variable_prefix;
+			std::stack<std::string> variable_prefixes;
 
 			// configurables
 			std::string skin;
@@ -78,7 +78,7 @@ namespace cppcms { namespace templates {
 		string make_string(const std::string& repr);
 		name make_name(const std::string& repr);
 		identifier make_identifier(const std::string& repr);
-		call_list make_call_list(const std::string& repr);
+		call_list make_call_list(const std::string& repr, const std::string& prefix);
 		param_list make_param_list(const std::string& repr);
 		cpp make_cpp(const std::string& repr);
 		text make_text(const std::string& repr);
@@ -101,6 +101,7 @@ namespace cppcms { namespace templates {
 			const T& as() const { return dynamic_cast<const T&>(*this); }
 
 			virtual std::string repr() const = 0;
+			virtual std::string code(generator::context&) const = 0;
 			virtual ~base_t() {}
 		};
 
@@ -108,6 +109,7 @@ namespace cppcms { namespace templates {
 		public:
 			using base_t::base_t;
 			virtual std::string repr() const;
+			virtual std::string code(generator::context&) const;
 		};
 
 		class html_t : public text_t { using text_t::text_t; };
@@ -119,13 +121,14 @@ namespace cppcms { namespace templates {
 			double real() const;
 			int integer() const;
 			virtual std::string repr() const;
+			virtual std::string code(generator::context&) const;
 		};
 
 		class variable_t : public base_t {
 		public:
 			using base_t::base_t;
 			virtual std::string repr() const;
-			std::string code(generator::context&) const;
+			virtual std::string code(generator::context&) const;
 		};
 		
 		class string_t : public base_t {
@@ -133,6 +136,7 @@ namespace cppcms { namespace templates {
 			string_t(const std::string&);
 			std::string repr() const;
 			virtual std::string unescaped() const;
+			virtual std::string code(generator::context&) const;
 		};
 
 		class name_t : public base_t {
@@ -140,20 +144,25 @@ namespace cppcms { namespace templates {
 			using base_t::base_t;
 			bool operator<(const name_t& rhs) const;
 			std::string repr() const;
+			virtual std::string code(generator::context&) const;
 		};
 		
 		class identifier_t : public base_t {
 		public:
 			using base_t::base_t;
 			std::string repr() const;
+			virtual std::string code(generator::context&) const;
 		};
 		
 		class call_list_t : public base_t {
 			const std::vector<ptr> arguments_;
+			const std::string function_prefix_;
+			std::string current_argument_;
 		public:
-			call_list_t(const std::string& expr); 
+			call_list_t(const std::string& expr, const std::string& function_prefix); 
+			call_list_t& argument(const std::string&);
 			std::string repr() const;
-			std::string code(generator::context& context, const std::string& function_prefix = std::string(), const std::string argument = std::string()) const;
+			virtual std::string code(generator::context& context) const;
 		};
 		
 		class param_list_t : public base_t {
@@ -161,21 +170,24 @@ namespace cppcms { namespace templates {
 			param_list_t(const std::string&);
 			using base_t::base_t;
 			std::string repr() const;
+			virtual std::string code(generator::context& context) const;
 		};
 		
 		class filter_t : public call_list_t {
-			bool exp_;
+			const bool exp_;
+			const std::string current_argument_;
 		public:
 			using call_list_t::call_list_t;
 			filter_t(const std::string&);		
 			bool is_exp() const;
-			std::string code(generator::context& context, const std::string argument) const;
+			virtual std::string code(generator::context& context) const;
 		};
 
 		class cpp_t : public base_t { 
 		public:
 			using base_t::base_t;
 			std::string repr() const;
+			virtual std::string code(generator::context& context) const;
 		};
 
 

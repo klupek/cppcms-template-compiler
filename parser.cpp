@@ -1328,7 +1328,6 @@ namespace cppcms { namespace templates {
 			expr::variable with;
 			p.skipws(false);
 			p.try_argument_list(); // [ argument_list ], cant fail
-			id = expr::make_call_list(expr + p.get(-1));
 			while(!p.details().empty()) 
 				p.details().pop(); // aka p.details().clear();
 
@@ -1348,6 +1347,14 @@ namespace cppcms { namespace templates {
 			if(!p.skipws(false).try_token("%>")) {
 				p.raise("expected %> after gt expression");
 			}
+			if(from) {
+				id = expr::make_call_list(expr + alist, from->repr() + ".");
+			} else if(_using) {
+				id = expr::make_call_list(expr + alist, "_using.");
+			} else {
+				id = expr::make_call_list(expr + alist, "");
+			}
+
 			current_ = current_->as<ast::has_children>().add<ast::include_t>(id, p.line(), from, _using, with);
 #ifdef PARSER_TRACE
 			std::cout << "render: include " << id;
@@ -1519,6 +1526,10 @@ namespace cppcms { namespace templates {
 			return "\"" + value_ + "\"";
 		}
 
+		std::string text_t::code(generator::context&) const {
+			return "\"" + value_ + "\"";
+		}
+
 		double number_t::real() const {
 			return boost::lexical_cast<double>(value_);
 		}
@@ -1528,6 +1539,10 @@ namespace cppcms { namespace templates {
 		}
 
 		std::string number_t::repr() const {
+			return value_;
+		}
+		
+		std::string number_t::code(generator::context&) const {
 			return value_;
 		}
 
@@ -1545,29 +1560,33 @@ namespace cppcms { namespace templates {
 			}
 		}
 		filter_t::filter_t(const std::string& input) 
-			: call_list_t(split_exp_filter(input).first)
+			: call_list_t(split_exp_filter(input).first, 
+					split_exp_filter(input).second ? "$var" : "cppcms::filters::")
 			, exp_(split_exp_filter(input).second) {}
 				
 		bool filter_t::is_exp() const { return exp_; }
-			
-		std::string filter_t::code(generator::context& context, const std::string argument) const {
+
+		std::string filter_t::code(generator::context& context) const {
 			if(exp_) {
-				return call_list_t::code(context, context.variable_prefix, argument);
+				return call_list_t::code(context);
 			} else {
-				return call_list_t::code(context, "cppcms::filters::", argument);
+				return call_list_t::code(context);
 			}
 		}
 
-		std::string call_list_t::code(generator::context& context,const std::string& function_prefix, const std::string argument) const {
+		std::string call_list_t::code(generator::context& context) const {
 			std::ostringstream oss;
-			oss << function_prefix << value_ << "(  ";
-			if(!argument.empty())
-				oss << argument << ", ";
+			if(function_prefix_ == "$var")
+				oss << context.variable_prefixes.top() << value_ << "(  ";
+			else
+				oss << function_prefix_ << value_ << "(  ";
+			if(!current_argument_.empty())
+				oss << current_argument_ << ", ";
 			for(const ptr& x : arguments_) {
 				if(x->is_a<expr::variable_t>())
 					oss << x->as<expr::variable_t>().code(context) << ", ";
 				else
-					oss << x->repr() << ", ";
+					oss << x->code(context) << ", ";
 			}
 			const std::string result = oss.str();
 			return result.substr(0, result.length()-2) + ")";
@@ -1575,23 +1594,33 @@ namespace cppcms { namespace templates {
 
 		std::string variable_t::code(generator::context& context) const {
 			if(value_[0] == '*')
-				return "*" + context.variable_prefix + value_.substr(1);
+				return "*" + context.variable_prefixes.top() + value_.substr(1);
 			else
-				return context.variable_prefix + value_;
+				return context.variable_prefixes.top() + value_;
 		}
 
 		std::string string_t::repr() const { 
 			return value_;
 		}
 		
+		std::string string_t::code(generator::context& context) const {
+			return value_;
+		}
+
+		
 		std::string cpp_t::repr() const { 
 			return value_;
 		}
 		
+		std::string cpp_t::code(generator::context&) const { 
+			return value_;
+		}
+		
 
-		call_list_t::call_list_t(const std::string& value)
+		call_list_t::call_list_t(const std::string& value, const std::string& function_prefix)
 			: base_t(split_function_call(value).first)
-			, arguments_(split_function_call(value).second) {}
+			, arguments_(split_function_call(value).second) 
+			, function_prefix_(function_prefix) {}
 
 		std::string call_list_t::repr() const { 
 			std::string result = value_ + "(";
@@ -1599,6 +1628,11 @@ namespace cppcms { namespace templates {
 				result += x->repr() + ",";
 			result[result.length()-1] = ')';
 			return result;
+		}
+
+		call_list_t& call_list_t::argument(const std::string& arg) {
+			current_argument_ = arg;
+			return *this;
 		}
 			
 		std::string string_t::unescaped() const {
@@ -1612,7 +1646,15 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
+		std::string name_t::code(generator::context& context) const {
+			return value_;
+		}
+		
 		std::string identifier_t::repr() const {
+			return value_;
+		}
+			
+		std::string identifier_t::code(generator::context&) const {
 			return value_;
 		}
 		
@@ -1622,7 +1664,10 @@ namespace cppcms { namespace templates {
 		std::string param_list_t::repr() const {
 			return value_;
 		}
-			
+		
+		std::string param_list_t::code(generator::context&) const {
+			return value_;
+		}
 
 		bool name_t::operator<(const name_t& rhs) const {
 			return repr() < rhs.repr();
@@ -1668,8 +1713,8 @@ namespace cppcms { namespace templates {
 			return std::make_shared<identifier_t>(repr);
 		}
 		
-		call_list make_call_list(const std::string& repr) {
-			return std::make_shared<call_list_t>(repr);
+		call_list make_call_list(const std::string& repr, const std::string& prefix) {
+			return std::make_shared<call_list_t>(repr, prefix);
 		}
 		
 		param_list make_param_list(const std::string& repr) {
@@ -1822,13 +1867,13 @@ namespace cppcms { namespace templates {
 				if(!context.skin.empty() && context.skin != skin.first.repr())
 					throw error_at_line("Mismatched skin names, in argument and template source", skin.second.line);
 				o << ln(skin.second.line);
-				o << "namespace " << skin.first.repr() << " {\n";
+				o << "namespace " << skin.first.code(context) << " {\n";
 				context.current_skin = skin.first.repr();
 				for(const view_set_t::value_type& view : skin.second.views) {
 					view.second->write(context, o);
 				}
 				o << ln(skin.second.endline);
-				o << "} // end of namespace " << skin.first.repr() << "\n";
+				o << "} // end of namespace " << skin.first.code(context) << "\n";
 			}
 			file_position_t pll = skins.rend()->second.endline; // past last line
 			pll.line++;
@@ -1849,22 +1894,22 @@ namespace cppcms { namespace templates {
 		}
 		
 		void view_t::write(generator::context& context, std::ostream& o) {
-			context.skins[context.current_skin].views.emplace_back( generator::context::view_t { name_->repr(), data_->repr() });
+			context.skins[context.current_skin].views.emplace_back( generator::context::view_t { name_->code(context), data_->code(context) });
 			o << ln(line());
-			o << "struct " << name_->repr() << ":public ";
+			o << "struct " << name_->code(context) << ":public ";
 			if(master_)
-				o << master_->repr();
+				o << master_->code(context);
 			else
 				o << "cppcms::base_view\n";
 			o << ln(line()) << " {\n";
 			
 			o << ln(line());
-			o << data_->repr() << " & content;\n";
+			o << data_->code(context) << " & content;\n";
 			
 			o << ln(line());
-			o << name_->repr() << "(std::ostream & _s, " << data_->repr() << " & _content):";
+			o << name_->code(context) << "(std::ostream & _s, " << data_->code(context) << " & _content):";
 			if(master_)
-				o << master_->repr() << "(_s, _content)";
+				o << master_->code(context) << "(_s, _content)";
 			else 
 				o << "cppcms::base_view(_s)";
 			o << ",content(_content)\n" << ln(line()) << "{\n" << ln(line()) << "}\n";
@@ -1873,7 +1918,7 @@ namespace cppcms { namespace templates {
 				tpl.second->write(context, o);
 			}
 
-			o << ln(endline_) << "}; // end of class " << name_->repr() << "\n";
+			o << ln(endline_) << "}; // end of class " << name_->code(context) << "\n";
 		}
 			
 		void root_t::dump(std::ostream& o, int tabs)  const {
@@ -1902,7 +1947,7 @@ namespace cppcms { namespace templates {
 		}
 
 		void text_t::write(generator::context& context, std::ostream& o) {
-			o << ln(line()) << "out() << " << value_->repr() << ";\n";
+			o << ln(line()) << "out() << " << value_->code(context) << ";\n";
 		}
 		base_ptr text_t::end(const std::string&, file_position_t) {
 			throw std::logic_error("unreachable code -- this is not block node");			
@@ -1919,11 +1964,11 @@ namespace cppcms { namespace templates {
 		}
 
 		void template_t::write(generator::context& context, std::ostream& o) {
-			o << ln(line()) << "virtual void " << name_->repr() << arguments_->repr() << "{\n";
+			o << ln(line()) << "virtual void " << name_->code(context) << arguments_->code(context) << "{\n";
 			for(const base_ptr child : children) {
 				child->write(context, o);
 			}
-			o << ln(endline_) << "} // end of template " << name_->repr() << "\n";
+			o << ln(endline_) << "} // end of template " << name_->code(context) << "\n";
 		}
 
 		base_ptr view_t::add_template(const expr::name& name, file_position_t line, const expr::param_list& arguments) {
@@ -2033,7 +2078,7 @@ namespace cppcms { namespace templates {
 				std::string current = name_->code(context);
 				for(auto i = filters_.rbegin(); i != filters_.rend(); ++i) {
 					expr::filter filter = *i;
-					current = filter->code(context, current);
+					current = filter->argument(current).code(context);
 				}
 				return current;
 			}
@@ -2077,7 +2122,7 @@ namespace cppcms { namespace templates {
 			if(name_ == "gt") {
 				function_name = "cppcms::locale::translate";
 			} else if(name_ == "url") {
-				o << "content.app().mapper().map(out(), " << fmt_->repr();
+				o << "content.app().mapper().map(out(), " << fmt_->code(context);
 				for(const using_option_t& uo : using_options_) {
 					o << ", " << uo.code(context, "cppcms::filters::urlencode");
 				}
@@ -2087,9 +2132,9 @@ namespace cppcms { namespace templates {
 				// TODO	
 			}
 			if(using_options_.empty()) {
-				o << "out() << " << function_name << "(" << fmt_->repr() << ");\n";
+				o << "out() << " << function_name << "(" << fmt_->code(context) << ");\n";
 			} else {
-				o << "out() << cppcms::locale::format(" << function_name << "(" << fmt_->repr() << ")) ";
+				o << "out() << cppcms::locale::format(" << function_name << "(" << fmt_->code(context) << ")) ";
 				for(const using_option_t& uo : using_options_) {
 					o << " % (" << uo.code(context) << ")";
 				}
@@ -2132,13 +2177,13 @@ namespace cppcms { namespace templates {
 			
 			if(using_options_.empty()) {
 				o << "out() << " << function_name << "(" 
-					<< singular_->repr() << ", " 
-					<< plural_->repr() << ", " 
+					<< singular_->code(context) << ", " 
+					<< plural_->code(context) << ", " 
 					<< variable_->code(context) << ");\n";
 			} else {
 				o << "out() << cppcms::locale::format(" << function_name << "(" 
-					<< singular_->repr() << ", " 
-					<< plural_->repr() << ", "
+					<< singular_->code(context) << ", " 
+					<< plural_->code(context) << ", "
 					<< variable_->code(context) << ")) ";
 				for(const using_option_t& uo : using_options_) {
 					o << " % (" << uo.code(context) << ")";
@@ -2185,9 +2230,9 @@ namespace cppcms { namespace templates {
 		void include_t::write(generator::context& context, std::ostream& o) {
 			o << ln(line());
 			if(from_) {
-				o << name_->code(context, from_->repr() + ".") << ";";
+				o << name_->code(context) << ";";
 			} else if(using_) {
-				o << "{\n" << ln(line()) << using_->repr() << " _using(out(), ";
+				o << "{\n" << ln(line()) << using_->code(context) << " _using(out(), ";
 				if(with_) {
 					o << with_->code(context);
 				} else {
@@ -2195,7 +2240,7 @@ namespace cppcms { namespace templates {
 				} 
 				o << ");\n";
 				o << ln(line());
-				o << "_using." << name_->code(context) << ";\n";
+				o << name_->code(context) << ";\n";
 				o << ln(line()) << "}";
 			} else {
 				o << name_->code(context) << ";";
@@ -2568,7 +2613,7 @@ int main(int argc, char **argv) {
 		p.tree()->dump(std::cout);
 	else {
 		cppcms::templates::generator::context ctx;
-		ctx.variable_prefix = "content.";
+		ctx.variable_prefixes.push("content.");
 		if(argc >= 4 && std::string(argv[3]) == "-s") {
 			ctx.skin = std::string(argv[4]);
 		}
