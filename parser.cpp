@@ -2062,7 +2062,8 @@ namespace cppcms { namespace templates {
 			o << p << "c++: " << code_ << std::endl;
 		}
 
-		void cppcode_t::write(generator::context& context, std::ostream& /* o */) {
+		void cppcode_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line()) << code_->code(context) << std::endl;
 		}
 
 		base_ptr cppcode_t::end(const std::string&, file_position_t) {
