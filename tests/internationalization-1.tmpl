@@ -1,0 +1,12 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			<% gt "Press the button" %>  
+			<% gt "Hello Dear {1}, we are glad to see you!" using name %>  
+			<% gt "Hello <a href=\"{1}\">{2}</a> you have {3}" using link | urlencode , name , something %>  
+			<% ngt "You have one apple","You have {2} apples",n using n %>  
+		<% end template %>
+	<% end view %> 
+	<% view page uses data::page extends master %>
+	<% end view %>  
+<% end %>  

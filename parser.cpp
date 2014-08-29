@@ -1231,7 +1231,7 @@ namespace cppcms { namespace templates {
 						x.emplace_back(expr::make_filter(*i));
 
 					options.emplace_back(ast::using_option_t { 
-						expr::make_variable(op.item), x 
+						expr::make_variable(op.item), p.line(), x, nullptr
 					});
 					filters.clear();
 				} else if(op.what == "complex_variable") {
@@ -1832,7 +1832,7 @@ namespace cppcms { namespace templates {
 			o << ln(endline_) << "}; // end of class " << name_->repr() << "\n";
 		}
 			
-		void root_t::dump(std::ostream& o, int tabs) {
+		void root_t::dump(std::ostream& o, int tabs)  const {
 			std::string p(tabs, '\t');
 			o << p << "root with " << codes.size() << " codes, mode = " << (mode_.empty() ? "(default)" : mode_) << " [\n";
 			for(const skins_t::value_type& skin : skins) {
@@ -1852,7 +1852,7 @@ namespace cppcms { namespace templates {
 			: base_t("text", line, false, parent)
 			, value_(value) {}
 
-		void text_t::dump(std::ostream& o, int tabs) {
+		void text_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "text: " << *value_ << std::endl;			
 		}
@@ -1895,7 +1895,7 @@ namespace cppcms { namespace templates {
 			, data_(data)
 	       		, endline_(line)	{}
 		
-		void view_t::dump(std::ostream& o, int tabs) {
+		void view_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "view " << *name_ << " uses " << *data_ << " extends ";
 			if(master_)
@@ -1914,7 +1914,7 @@ namespace cppcms { namespace templates {
 			: base_t(sysname, line, block, parent)
 	       		, endline_(line)	{}
 			
-		void has_children::dump(std::ostream& o, int tabs) {
+		void has_children::dump(std::ostream& o, int tabs)  const {
 			for(const base_ptr& child : children) 
 				child->dump(o, tabs);
 		}
@@ -1935,7 +1935,7 @@ namespace cppcms { namespace templates {
 			}
 		}
 
-		void template_t::dump(std::ostream& o, int tabs) {
+		void template_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "template " << *name_ << " with arguments " << *arguments_ << " and " << children.size() << " children [\n";
 			for(const base_ptr& child : children)
@@ -1947,7 +1947,7 @@ namespace cppcms { namespace templates {
 			: base_t("c++", line, false, parent)
 			, code_(code) {}
 
-		void cppcode_t::dump(std::ostream& o, int tabs) {
+		void cppcode_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "c++: " << code_ << std::endl;
 		}
@@ -1964,7 +1964,7 @@ namespace cppcms { namespace templates {
 			, name_(name)
 			, filters_(filters) {}
 
-		void variable_t::dump(std::ostream& o, int tabs) {
+		void variable_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "variable: " << *name_;
 			if(filters_.empty())
@@ -1981,22 +1981,25 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void variable_t::write(generator::context& context, std::ostream& o) {
-			const std::string escape = "cppcms::filters::escape(";
+		std::string variable_t::code(generator::context& context, const std::string& escaper) const {
+			const std::string escape = escaper + "(";
 			const std::string prefix = "content.";
 			const std::string filter_prefix = "cppcms::filters::";
-
-			o << ln(line());
 			if(filters_.empty()) {				
-				o << "out() << " << escape << name_->prefixed(prefix) << ");\n";
+				return escape + name_->prefixed(prefix) + ")";
 			} else {
 				std::string current = name_->prefixed(prefix);
 				for(auto i = filters_.rbegin(); i != filters_.rend(); ++i) {
 					expr::filter filter = *i;
 					current = filter->code(filter_prefix, prefix, current);
 				}
-				o << "out() << " << current << ";\n";
+				return current;
 			}
+		}
+
+		void variable_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line());
+			o << "out() << " << code(context) << ";\n";
 		}
 			
 		fmt_function_t::fmt_function_t(	const std::string& name,
@@ -2009,7 +2012,7 @@ namespace cppcms { namespace templates {
 			, fmt_(fmt)
 			, using_options_(uos) {}
 		
-		void fmt_function_t::dump(std::ostream& o, int tabs) {
+		void fmt_function_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "fmt function " << name_ << ": " << fmt_->repr() << std::endl;
 			if(using_options_.empty()) {
@@ -2017,14 +2020,7 @@ namespace cppcms { namespace templates {
 			} else {
 				o << p << "\twith using options:\n"; 
 				for(const using_option_t& uo : using_options_) {
-					o << p << "\t\t" << *uo.variable;
-					if(!uo.filters.empty()) {
-						o << " with filters ";
-						for(const expr::filter& filter : uo.filters)  {
-							o << " | " << *filter;
-						}
-					}
-					o << std::endl;
+					uo.dump(o, tabs+2);
 				}
 			}
 		}
@@ -2033,7 +2029,30 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void fmt_function_t::write(generator::context& context, std::ostream& /* o */) {
+		void fmt_function_t::write(generator::context& context, std::ostream& o) {						
+			o << ln(line());
+			std::string function_name;
+			if(name_ == "gt") {
+				function_name = "cppcms::locale::translate";
+			} else if(name_ == "url") {
+				o << "content.app().mapper().map(out(), " << fmt_->repr();
+				for(const using_option_t& uo : using_options_) {
+					o << ", " << uo.code(context, "cppcms::filters::urlencode");
+				}
+				o << ");\n";
+				return; 
+			} else {
+				// TODO	
+			}
+			if(using_options_.empty()) {
+				o << "out() << " << function_name << "(" << fmt_->repr() << ");\n";
+			} else {
+				o << "out() << cppcms::locale::format(" << function_name << "(" << fmt_->repr() << ")) ";
+				for(const using_option_t& uo : using_options_) {
+					o << " % (" << uo.code(context) << ")";
+				}
+				o << ";\n";
+			}
 		}
 		
 		ngt_t::ngt_t(	file_position_t line,
@@ -2048,7 +2067,7 @@ namespace cppcms { namespace templates {
 			, variable_(variable) 
 			, using_options_(uos) {}
 		
-		void ngt_t::dump(std::ostream& o, int tabs) {
+		void ngt_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "fmt function ngt: " << *singular_ << "/" << *plural_ << " with variable " << *variable_ <<  std::endl;
 			if(using_options_.empty()) {
@@ -2056,14 +2075,7 @@ namespace cppcms { namespace templates {
 			} else {
 				o << p << "\twith using options:\n"; 
 				for(const using_option_t& uo : using_options_) {
-					o << p << "\t\t" << *uo.variable;
-					if(!uo.filters.empty()) {
-						o << " with filters ";
-						for(const expr::filter& filter : uo.filters)  {
-							o << " | " << *filter;
-						}
-					}
-					o << std::endl;
+					uo.dump(o,tabs+2);
 				}
 			}
 		}
@@ -2072,7 +2084,25 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("end in non-block component");
 		}
 
-		void ngt_t::write(generator::context& context, std::ostream& /* o */) {
+		void ngt_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line());
+			const std::string function_name = "cppcms::locale::translate";
+			
+			if(using_options_.empty()) {
+				o << "out() << " << function_name << "(" 
+					<< singular_->repr() << ", " 
+					<< plural_->repr() << ", " 
+					<< variable_->prefixed("content.") << ");\n";
+			} else {
+				o << "out() << cppcms::locale::format(" << function_name << "(" 
+					<< singular_->repr() << ", " 
+					<< plural_->repr() << ", "
+					<< variable_->prefixed("content.") << ")) ";
+				for(const using_option_t& uo : using_options_) {
+					o << " % (" << uo.code(context) << ")";
+				}
+				o << ";\n";
+			}
 		}
 			
 		include_t::include_t(	const expr::call_list& name, file_position_t line, const expr::identifier& from, 
@@ -2084,7 +2114,7 @@ namespace cppcms { namespace templates {
 			, using_(_using) 
 			, with_(with) {}
 		
-		void include_t::dump(std::ostream& o, int tabs) {
+		void include_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "include " << *name_;
 
@@ -2118,7 +2148,7 @@ namespace cppcms { namespace templates {
 			, style_(style)
 			, name_(name) {}
 		
-		void form_t::dump(std::ostream& o, int tabs) {
+		void form_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "form style = " << *style_ << " using variable " << *name_ << std::endl;
 		}
@@ -2134,7 +2164,7 @@ namespace cppcms { namespace templates {
 			: base_t("csrf", line, false, parent)
 			, style_(style) {}
 		
-		void csrf_t::dump(std::ostream& o, int tabs) {
+		void csrf_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			if(style_)
 				o << p << "csrf style = " << *style_ << "\n";
@@ -2155,7 +2185,7 @@ namespace cppcms { namespace templates {
 			, view_(view)
 			, with_(with) {}
 		
-		void render_t::dump(std::ostream& o, int tabs) {
+		void render_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "render skin = ";
 			if(skin_)
@@ -2184,7 +2214,7 @@ namespace cppcms { namespace templates {
 			, with_(with)
 			, as_(as) {}
 		
-		void using_t::dump(std::ostream& o, int tabs) {
+		void using_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "using view type " << *id_ << " as " << *as_ << " with ";
 			if(with_)
@@ -2241,7 +2271,7 @@ namespace cppcms { namespace templates {
 			return conditions_.back();
 		}
 		
-		void if_t::dump(std::ostream& o, int tabs) {
+		void if_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "if with " << conditions_.size() << " branches [\n";
 			for(const condition_ptr& c : conditions_)
@@ -2256,7 +2286,7 @@ namespace cppcms { namespace templates {
 		void if_t::write(generator::context& context, std::ostream& /* o */) {
 		}
 		
-		void if_t::condition_t::dump(std::ostream& o, int tabs) {
+		void if_t::condition_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			const std::string neg = (negate_ ? "not " : "");
 			switch(type_) {
@@ -2307,7 +2337,7 @@ namespace cppcms { namespace templates {
 			, array_(array) 
 			, reverse_(reverse) {}
 			
-		void foreach_t::dump(std::ostream& o, int tabs) {
+		void foreach_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "foreach " << *name_;
 			if(as_)
@@ -2429,7 +2459,7 @@ namespace cppcms { namespace templates {
 			return shared_from_this();
 		}
 		
-		void cache_t::dump(std::ostream& o, int tabs) {
+		void cache_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			o << p << "cache " << *name_;
 			if(duration_ > -1)

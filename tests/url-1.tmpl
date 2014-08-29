@@ -1,0 +1,11 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			<% url "/blog/summary"  %>  
+			<% url "../summary"  %>  
+			<% url "/blog/post" using post_id %>  
+			<% url "/blog/post" using post_id , slug | ext filter_for_url %>
+			<% url "/blog/post" using slug %>  
+		<% end template %>
+	<% end view %> 
+<% end %>  
