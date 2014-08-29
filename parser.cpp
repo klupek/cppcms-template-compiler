@@ -968,7 +968,7 @@ namespace cppcms { namespace templates {
 			const std::string verb = p.get(-2);
 			expr::cpp cond;
 			expr::variable variable;
-			ast::if_t::type_t type = ast::if_t::if_regular;
+			ast::if_t::type_t type = ast::if_t::type_t::if_regular;
 			bool negate = false;
 			if(p.try_token_ws("not")) {
 				negate = true;
@@ -982,8 +982,9 @@ namespace cppcms { namespace templates {
 				variable = expr::make_variable(p.get(-2));
 				type = ast::if_t::type_t::if_regular;
 			} else if(p.back(2).try_token("(") && p.back(1).try_parenthesis_expression().skipws(false)) { // [ (, \s*, expr, \s* ]
-				cond = expr::make_cpp(p.get(-2));
-				type = ast::if_t::if_cpp;
+				const std::string parenthesed = p.get(-2);
+				cond = expr::make_cpp(parenthesed.substr(1,parenthesed.length()-2));
+				type = ast::if_t::type_t::if_cpp;
 			} else {
 				p.raise("expected [not] [empty] ([variable]|rtl) or ( c++ expr )");
 			}
@@ -1011,7 +1012,7 @@ namespace cppcms { namespace templates {
 			} else {
 				current_ = current_->as<ast::if_t>().add_condition(p.line(), type, variable, negate);
 			}
-		} else if(p.reset().try_token_ws("else").try_token_ws("%>")) {
+		} else if(p.reset().try_token_ws("else").try_close_expression()) {
 			if(current_->sysname() == "condition") {
 				current_ = current_->parent();
 			} else {
@@ -2504,6 +2505,8 @@ namespace cppcms { namespace templates {
 			: has_children("if", line, true, parent) {}
 
 		base_ptr if_t::add_condition(file_position_t line, type_t type, bool negate) {
+			if(!conditions_.empty())
+				conditions_.back()->end(std::string(), line);
 			conditions_.emplace_back(
 				std::make_shared<condition_t>(line, type, expr::cpp(), expr::variable(), negate, shared_from_this())
 			);
@@ -2511,6 +2514,8 @@ namespace cppcms { namespace templates {
 		}
 			
 		base_ptr if_t::add_condition(file_position_t line, const type_t& type, const expr::variable& variable, bool negate) {
+			if(!conditions_.empty())
+				conditions_.back()->end(std::string(), line);
 			conditions_.emplace_back(
 				std::make_shared<condition_t>(line, type, expr::cpp(), variable, negate, shared_from_this())
 			);
@@ -2518,6 +2523,8 @@ namespace cppcms { namespace templates {
 		}
 			
 		base_ptr if_t::add_condition(file_position_t line, const expr::cpp& cond, bool negate) {
+			if(!conditions_.empty())
+				conditions_.back()->end(std::string(), line);
 			conditions_.emplace_back(
 				std::make_shared<condition_t>(line, type_t::if_cpp, cond, expr::variable(), negate, shared_from_this())
 			);
@@ -2536,26 +2543,44 @@ namespace cppcms { namespace templates {
 			throw std::logic_error("unreachable code (or rather: bug)");
 		}
 		
-		void if_t::write(generator::context& context, std::ostream& /* o */) {
+		void if_t::write(generator::context& context, std::ostream& o) {
+			auto condition = conditions_.begin();
+			(*condition)->write(context, o);
+
+			for(++condition; condition != conditions_.end(); ++condition) {
+				if((*condition)->type() == type_t::if_else ) {
+					o << " else ";
+				} else {
+					o << "\n" << ln((*condition)->line()) << "else\n";
+				}
+				(*condition)->write(context, o);
+			}
+			if(conditions_.back()->type() == type_t::if_else) {
+				o << "\n";
+			} else {
+				o << " // endif\n";
+			}
 		}
-		
+	
+		if_t::type_t if_t::condition_t::type() const { return type_; }
+
 		void if_t::condition_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
 			const std::string neg = (negate_ ? "not " : "");
 			switch(type_) {
-				case if_regular:
+				case type_t::if_regular:
 					o << p << "if " << neg << "true: " << *variable_;
 					break;
-				case if_empty:
+				case type_t::if_empty:
 					o << p << "if " << neg << "empty: " << *variable_;
 					break;
-				case if_rtl:
+				case type_t::if_rtl:
 					o << p << "if " << neg << "rtl";
 					break;
-				case if_cpp:
+				case type_t::if_cpp:
 					o << p << "if " << neg << "cpp: " << *cond_;
 					break;
-				case if_else:
+				case type_t::if_else:
 					o << p << "if else: ";
 					break;
 			}
@@ -2575,7 +2600,47 @@ namespace cppcms { namespace templates {
 			}
 		}
 		
-		void if_t::condition_t::write(generator::context& context, std::ostream& /* o */) {
+		void if_t::condition_t::write(generator::context& context, std::ostream& o) {			
+			if(type_ != type_t::if_else) {
+				o << ln(line());
+				o << "if(";
+			}
+
+			if(negate_)
+				o << "!(";
+
+			switch(type_) {
+			case type_t::if_regular:
+				o << "" << variable_->code(context) << "";
+				break;
+
+			case type_t::if_empty:
+				o << "" << variable_->code(context) << ".empty()";
+				break;
+
+			case type_t::if_rtl:
+				o << "(cppcms::locale::translate(\"LTR\").str(out().getloc()) == \"RTL\")";
+				break;
+			
+			case type_t::if_cpp:
+				o << "" << cond_->code(context) << "";
+				break;
+
+			case type_t::if_else:
+				break;				
+			}
+			if(negate_)
+				o << ")";
+			
+			if(type_ != type_t::if_else) {
+				o << ") {\n";
+			} else {
+				o << " {\n";
+			}
+			for(const base_ptr& bp : children) {
+				bp->write(context, o);
+			}
+			o << ln(endline_) << "} ";
 		}
 			
 		foreach_t::foreach_t(	file_position_t line, 

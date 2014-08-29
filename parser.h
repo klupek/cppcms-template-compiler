@@ -451,7 +451,7 @@ namespace cppcms { namespace templates {
 
 		class if_t : public has_children {
 		public:	
-			enum type_t { if_regular, if_empty, if_rtl, if_cpp, if_else };
+			enum class type_t { if_regular, if_empty, if_rtl, if_cpp, if_else };
 		private:
 			class condition_t : public has_children {
 				const type_t type_;
@@ -460,6 +460,7 @@ namespace cppcms { namespace templates {
 				const bool negate_;
 			public:
 				condition_t(file_position_t line, type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent);
+				type_t type() const;
 				virtual void dump(std::ostream& o, int tabs = 0) const;
 				virtual void write(generator::context& context, std::ostream& o);
 				virtual base_ptr end(const std::string& what, file_position_t line);
