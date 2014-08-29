@@ -88,8 +88,8 @@ next2
 <% form as_table form.fields %>  
 <% form as_space form.submit_buttons %>
 <% form input some_button %>  
-<% form begin some_button %>
-<% form block some_button %> 
+<% form begin some_button %><% end %>
+<% form block some_button %><% end %>
 <% csrf %>
 <% cache "foo" %>  
     <% cache "ba\"r\"r" %>  

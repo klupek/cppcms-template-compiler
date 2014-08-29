@@ -612,9 +612,13 @@ namespace cppcms { namespace templates {
 		parser& try_identifier(); // -> [ ID ]
 		parser& try_identifier_ws(); // -> [ ID, \s+ ]
 		parser& skip_to(const std::string& token); // -> [ prefix, token ]
-		parser& skipws(bool require); // -> [ \s* ]
+		parser& skipws(bool require, bool add_to_stack = true); // -> [ \s* ]
 		parser& skip_to_end(); // -> [ ... ]
 		parser& try_parenthesis_expression(); // [ ... ]
+
+		// input: skip any whitespaces, find '%>' or '% >'
+		// stack: add '%>' or '% >'
+		parser& try_close_expression(); // %> and variations 
 		
 		template<typename T=std::string>
 		T get(int n);

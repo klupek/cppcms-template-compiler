@@ -377,6 +377,17 @@ namespace cppcms { namespace templates {
 		}
 		return *this;
 	}
+	
+	parser& parser::try_close_expression() {
+		if(!failed_) {
+			for(;source_.has_next() && std::isspace(source_.current()); source_.move(1));
+		}
+
+		if(!try_token("%>")) {
+			back(1).try_token("% >");
+		}
+		return *this;
+	}
 
 	/* NAME is a sequence of Latin letters, digits and underscore starting with a letter. They represent identifiers and can be defined by regular expression such as: [a-zA-Z][a-zA-Z0-9_]* */
 	parser& parser::try_name() {
@@ -689,11 +700,12 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::skipws(bool require) {
+	parser& parser::skipws(bool require, bool add_to_stack) {
 		if(!failed_ && source_.has_next()) {
 			const size_t start = source_.index();
 			for(;source_.has_next() && std::isspace(source_.current()); source_.move(1));
-			stack_.emplace_back( state_t { start, source_.left_context_from(start) });
+			if(add_to_stack)
+				stack_.emplace_back( state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
 			std::cout << ">>> skipws from " << start << " to " << source_.index() << std::endl;
 #endif
@@ -944,6 +956,8 @@ namespace cppcms { namespace templates {
 				current_path += " / " + i->sysname();
 			p.raise("invalid sequence: " + current_path);			
 			// FIXME: more verbose
+		} catch(const std::runtime_error& e) {
+			p.raise(e.what());
 		}
 	}
 
@@ -973,7 +987,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.raise("expected [not] [empty] ([variable]|rtl) or ( c++ expr )");
 			}
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %>");
 			}
 
@@ -1039,7 +1053,7 @@ namespace cppcms { namespace templates {
 				p.back(2);
 			}
 
-			if(p.try_token_ws("in").try_variable_ws().try_token("%>")) {
+			if(p.try_token_ws("in").try_variable_ws().try_close_expression()) {
 				variable = expr::make_variable(p.get(-3));
 			} else {
 				p.raise("expected in VARIABLE %>");
@@ -1051,19 +1065,19 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "flow: foreach (" << item_name << " in " << variable << "; rowid " << rowid << ", reverse " << reverse << ", as " << as << ", from " << from << "\n";
 #endif
-		} else if(p.reset().try_token_ws("item").try_token("%>")) {
+		} else if(p.reset().try_token_ws("item").try_close_expression()) {
 			// current_ is foreach_t > item_prefix
 			current_ = current_->parent()->as<ast::foreach_t>().item(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: item\n";
 #endif
-		} else if(p.reset().try_token_ws("empty").try_token("%>")) {
+		} else if(p.reset().try_token_ws("empty").try_close_expression()) {
 			// current_ is foreach_t > something
 			current_ = current_->parent()->as<ast::foreach_t>().empty(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: empty\n";
 #endif
-		} else if(p.reset().try_token_ws("separator").try_token("%>")) {
+		} else if(p.reset().try_token_ws("separator").try_close_expression()) {
 			// current_ is foreach_t > something
 			current_ = current_->parent()->as<ast::foreach_t>().separator(p.line());
 #ifdef PARSER_TRACE
@@ -1076,7 +1090,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.back(2);
 			}
-			if(!p.try_token("%>")) {
+			if(!p.try_close_expression()) {
 				p.raise("expected %> after end [whatever]");
 			}
 			
@@ -1124,7 +1138,7 @@ namespace cppcms { namespace templates {
 				p.back(4);
 			}
 			
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %>");
 			}
 
@@ -1146,7 +1160,7 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "flow: trigger " << name << std::endl;
 #endif
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %>");
 			}
 		} else {
@@ -1163,9 +1177,9 @@ namespace cppcms { namespace templates {
 		if(p.try_token_ws("skin")) { //  [ skin, \s+ ] 
 			std::string skin_name;
 			p.push();
-			if(p.try_token("%>")) { // [ skin, \s+, %> ]
+			if(p.try_close_expression()) { // [ skin, \s+, %> ]
 				skin_name = "__default__";
-			} else if(p.reset().try_name_ws().try_token("%>")) { // [ skin, \s+, skinname, \s+, %> ]
+			} else if(p.reset().try_name_ws().try_close_expression()) { // [ skin, \s+, skinname, \s+, %> ]
 				skin_name = p.get(-3);
 			} else {
 				p.reset().raise("expected %> or skin name");
@@ -1193,7 +1207,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.reset().raise("expected view NAME uses IDENTIFIER [extends NAME]");
 			}
-			if(p.try_token("%>")) {
+			if(p.try_close_expression()) {
 				expr::name parent_name_ = (parent_name.empty() ? expr::name() : expr::make_name(parent_name));
 				current_ = current_->as<ast::root_t>().add_view(
 					expr::make_name(view_name), 
@@ -1220,7 +1234,7 @@ namespace cppcms { namespace templates {
 #endif
 		} else if(p.reset().try_token_ws("c++").skip_to("%>")) { // [ c++, \s+, cppcode, %> ] = 4
 			add_cpp(expr::make_cpp(p.get(-2)));
-		} else if(p.reset().try_token_ws("html").try_token("%>") || p.back(3).try_token_ws("xhtml").try_token("%>")) { // [ html|xhtml, \s+, %> ]
+		} else if(p.reset().try_token_ws("html").try_close_expression() || p.back(3).try_token_ws("xhtml").try_close_expression()) { // [ html|xhtml, \s+, %> ]
 			const std::string mode = p.get(-3);
 
 			current_ = current_->as<ast::root_t>().set_mode(mode, p.line());
@@ -1290,7 +1304,7 @@ namespace cppcms { namespace templates {
 			const expr::string fmt = expr::make_string(p.get(-2));
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %> after gt expression");
 			}
 
@@ -1304,7 +1318,7 @@ namespace cppcms { namespace templates {
 			const expr::variable variable = expr::make_variable(p.get(-2));
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %> after gt expression");
 			}
 
@@ -1316,7 +1330,7 @@ namespace cppcms { namespace templates {
 			const expr::string url = expr::make_string(p.get(-2));
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %> after gt expression");
 			}
 
@@ -1347,7 +1361,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.back(5);
 			}
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %> after gt expression");
 			}
 			if(from) {
@@ -1386,7 +1400,7 @@ namespace cppcms { namespace templates {
 			} else {
 				p.back(4).raise("expected 'as' IDENTIFIER");
 			}
-			if(!p.skipws(false).try_token("%>")) {
+			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %> after gt expression");
 			}
 
@@ -1397,7 +1411,7 @@ namespace cppcms { namespace templates {
 			std::cout << "\twith " << (with.empty() ? "(current)" : with) << std::endl;
 			std::cout << "\tas " << as << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_token("%>")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]			
+		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_close_expression()) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]			
 			const expr::name name = expr::make_name(p.get(-5));
 			const expr::variable var = expr::make_variable(p.get(-3));
 			if(name->repr() == "end")
@@ -1409,9 +1423,9 @@ namespace cppcms { namespace templates {
 #endif
 		} else if(p.reset().try_token_ws("csrf")) {
 			expr::name type;
-			if(p.try_name_ws().try_token("%>")) { // [ csrf, \s+, NAME, \s+, %> ]
+			if(p.try_name_ws().try_close_expression()) { // [ csrf, \s+, NAME, \s+, %> ]
 				type = expr::make_name(p.get(-3));
-			} else if(!p.back(3).try_token("%>")) {
+			} else if(!p.back(3).try_close_expression()) {
 				p.raise("expected csrf style(type) or %>");
 			}
 			// save to tree
@@ -1447,7 +1461,7 @@ namespace cppcms { namespace templates {
 				p.back(4);
 			}
 			
-			if(!p.try_token("%>")) {
+			if(!p.try_close_expression()) {
 				p.raise("expected %>");
 			}
 			// save to tree
@@ -1467,7 +1481,7 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_variable_expression() {
 		p.push();
-		if(p.try_complex_variable().skipws(false).try_token("%>")) { // [ variable expression, \s*, %> ]
+		if(p.try_complex_variable().skipws(false).try_close_expression()) { // [ variable expression, \s*, %> ]
 			const expr::variable expr = expr::make_variable(p.details().top().item);
 			std::vector<expr::filter> filters;
 			p.details().pop();
@@ -2288,10 +2302,15 @@ namespace cppcms { namespace templates {
 		}
 		
 		base_ptr form_t::end(const std::string& x, file_position_t) {
-			if((style_->repr() == "block" || style_->repr() == "begin") && ( x.empty() || x == "form" ))
-				return parent();
-			else
+			if(style_->repr() == "block" || style_->repr() == "begin") {
+				if(x.empty() || x == "form") {
+					return parent();
+				} else {
+					throw std::runtime_error("Unexpected 'end " + x + "', expected 'end form'");
+				}
+			} else {
 				throw std::logic_error("end in non-block component");
+			}
 		}
 		
 		void form_t::write(generator::context& context, std::ostream& o) {
