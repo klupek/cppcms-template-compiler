@@ -1974,8 +1974,14 @@ namespace cppcms { namespace templates {
 			: base_t("root", file_position_t{"__root__", 0}, true, nullptr)		
  			, current_skin(skins.end()) {}
 
-		base_ptr root_t::add_skin(const expr::name& name, file_position_t line) {			
-			current_skin = skins.emplace( *name, skin_t { line, line, view_set_t() } ).first;
+		base_ptr root_t::add_skin(const expr::name& name, file_position_t line) {		
+			current_skin = std::find_if(skins.begin(), skins.end(), [=](const skins_t::value_type& skin) {
+				return skin.first.repr() == name->repr();
+			});
+			if(current_skin == skins.end()) {
+				skins.emplace_back( *name, skin_t { line, line, view_set_t() } );
+				current_skin = --skins.end();
+			}
 			return shared_from_this();
 		}
 
@@ -1993,10 +1999,17 @@ namespace cppcms { namespace templates {
 		base_ptr root_t::add_view(const expr::name& name, file_position_t line, const expr::identifier& data, const expr::name& parent) {
 			if(current_skin == skins.end())
 				throw std::runtime_error("view must be inside skin");
-			
-			return current_skin->second.views.emplace(
-				*name, std::make_shared<view_t>(name, line, data, parent, shared_from_this())
-			).first->second;
+		
+			auto i = std::find_if(current_skin->second.views.begin(), current_skin->second.views.end(), [=](const view_set_t::value_type& ve) {
+				return ve.first.repr() == name->repr();
+			});
+			if(i == current_skin->second.views.end()) {
+				current_skin->second.views.emplace_back(
+					*name, std::make_shared<view_t>(name, line, data, parent, shared_from_this())
+				);
+				i = --current_skin->second.views.end();
+			}
+			return i->second;
 		}
 
 		std::string root_t::mode() const { 
@@ -2024,14 +2037,17 @@ namespace cppcms { namespace templates {
 			}
 
 			// check if there is no conflict between [ -s NAME ] argument and defined skins
-			auto i = skins.find(expr::name_t("__default__"));
+			auto i = std::find_if(skins.begin(), skins.end(), [](const skins_t::value_type& skin) {
+				return skin.first.repr() == "__default__";
+			});
+
 			if(i != skins.end()) {
 				if(context.skin.empty()) {
 					throw error_at_line("Requested default skin name, but none was provided in arguments", i->second.line);
 				} else {
-					skins[expr::name_t(context.skin)] = i->second;
+					skins.emplace_back(expr::name_t(context.skin), i->second);
+					skins.erase(i);
 				}
-				skins.erase(i);
 			}
 			
 			for(const code_t& code : codes) {
@@ -2050,7 +2066,7 @@ namespace cppcms { namespace templates {
 				o << ln(skin.second.endline);
 				o << "} // end of namespace " << skin.first.code(context) << "\n";
 			}
-			file_position_t pll = skins.rend()->second.endline; // past last line
+			file_position_t pll = skins.rbegin()->second.endline; // past last line
 			pll.line++;
 
 			for(const auto& skinpair : context.skins) {

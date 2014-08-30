@@ -8,6 +8,7 @@
 #include <memory>
 #include <map>
 #include <set>
+#include <list>
 #include <boost/lexical_cast.hpp>
 
 namespace cppcms { namespace templates {
@@ -299,14 +300,14 @@ namespace cppcms { namespace templates {
 				file_position_t line;
 				expr::cpp code;
 			};
-			std::vector<code_t> codes;
-			typedef std::map< expr::name_t, view_ptr > view_set_t;
+			std::vector<code_t> codes;			
+			typedef std::list< std::pair< expr::name_t, view_ptr> > view_set_t;
 			struct skin_t {
 				file_position_t line, endline;
 				view_set_t views;
 			};
 
-			typedef std::map< expr::name_t, skin_t > skins_t;
+			typedef std::list< std::pair<expr::name_t, skin_t> > skins_t;
 			skins_t skins;
 			skins_t::iterator current_skin;
 			std::string mode_;
