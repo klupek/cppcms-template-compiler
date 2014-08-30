@@ -38,10 +38,15 @@ namespace cppcms { namespace templates {
 			// runtime state (with loadable defaults)
 			std::string variable_prefix;
 			std::string output_mode;
-			std::set<std::string> scope_variables;
+			void add_scope_variable(const std::string& name);
+			void remove_scope_variable(const std::string& name);
+			bool check_scope_variable(const std::string& name);
 
 			// configurables
 			std::string skin;
+		private:
+			std::set<std::string> scope_variables;
+
 		};
 	}
 
@@ -75,19 +80,6 @@ namespace cppcms { namespace templates {
 		typedef std::shared_ptr<html_t> html;
 		typedef std::shared_ptr<xhtml_t> xhtml;
 
-		number make_number(const std::string& repr);
-		variable make_variable(const std::string& repr);
-		filter make_filter(const std::string& repr);
-		string make_string(const std::string& repr);
-		name make_name(const std::string& repr);
-		identifier make_identifier(const std::string& repr);
-		call_list make_call_list(const std::string& repr, const std::string& prefix);
-		param_list make_param_list(const std::string& repr);
-		cpp make_cpp(const std::string& repr);
-		text make_text(const std::string& repr);
-		html make_html(const std::string& repr);
-		xhtml make_xhtml(const std::string& repr);
-		
 		class base_t {
 		protected:
 			const std::string value_;
@@ -170,10 +162,21 @@ namespace cppcms { namespace templates {
 		
 		class param_list_t : public base_t {
 		public:
-			param_list_t(const std::string&);
+			struct param_t {
+				expr::identifier type;
+				bool is_const, is_ref;
+				expr::name name;
+			};
+			typedef std::vector<param_t> params_t;
+
+			param_list_t(const std::string&, const params_t&);
 			using base_t::base_t;
 			std::string repr() const;
+			const params_t& params() const;
+						
 			virtual std::string code(generator::context& context) const;
+		private:
+			const params_t params_;
 		};
 		
 		class filter_t : public call_list_t {
@@ -192,6 +195,20 @@ namespace cppcms { namespace templates {
 			std::string repr() const;
 			virtual std::string code(generator::context& context) const;
 		};
+		
+		number make_number(const std::string& repr);
+		variable make_variable(const std::string& repr);
+		filter make_filter(const std::string& repr);
+		string make_string(const std::string& repr);
+		name make_name(const std::string& repr);
+		identifier make_identifier(const std::string& repr);
+		call_list make_call_list(const std::string& repr, const std::string& prefix);
+		param_list make_param_list(const std::string& repr, const param_list_t::params_t&);
+		cpp make_cpp(const std::string& repr);
+		text make_text(const std::string& repr);
+		html make_html(const std::string& repr);
+		xhtml make_xhtml(const std::string& repr);
+		
 
 
 		std::ostream& operator<<(std::ostream& o, const name_t& obj);
@@ -613,6 +630,7 @@ namespace cppcms { namespace templates {
 		parser& try_filter(); // -> [ FILTER ]
 		parser& try_comma(); // [ ',' ]
 		parser& try_argument_list(); // [ argument_list ]
+		parser& try_param_list(); // [ param_list ]
 		parser& try_identifier(); // -> [ ID ]
 		parser& try_identifier_ws(); // -> [ ID, \s+ ]
 		parser& skip_to(const std::string& token); // -> [ prefix, token ]
@@ -701,6 +719,7 @@ namespace cppcms { namespace templates {
  * 	form	
  * 		additional form rendering engines should be registerable, 'form' NAME VARIABLE 
  * magic to do:
+ * 	namespace cppcms { namespace views { struct display_traits<mytype> { ...
  * 	collapsing all-whitespace strings in add_html()
  * 	form templates
  * 		skin, view, blah, blah, 

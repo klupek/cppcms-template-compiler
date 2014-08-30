@@ -258,6 +258,22 @@ namespace cppcms { namespace templates {
 		return std::string(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
 	}
 
+	namespace generator {
+		void context::add_scope_variable(const std::string& name) {
+			if(!scope_variables.insert(name).second)
+				throw std::runtime_error("duplicate local scope variable: " + name);
+		}
+		
+		void context::remove_scope_variable(const std::string& name) {
+			if(!scope_variables.erase(name))
+				throw std::logic_error("bug: tried to remove variable: " + name + " which is notin local scope");
+		}
+			
+		bool context::check_scope_variable(const std::string& name) {
+			return scope_variables.find(name) != scope_variables.end();
+		}
+	}
+
 	parser_source::parser_source(const std::string& filename)
 		: input_(readfile(filename))
        		, index_(0)
@@ -585,6 +601,63 @@ namespace cppcms { namespace templates {
 			} else {
 				failed_++;
 			}
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
+
+	parser& parser::try_param_list() {
+		if(!failed_ && source_.has_next()) {
+			size_t start = source_.index();
+			auto stack_copy = stack_;
+			if(try_token("(")) {
+				while(!failed_) {
+					bool is_const = false, is_ref = false;
+					skipws(false);				
+					if(try_token(")")) {
+						break;
+					} else if(back(1).try_identifier_ws()) {
+						const std::string type = get(-2);
+						if(try_token("const")) {
+							is_const = true;
+							skipws(false);
+						} else {
+							back(1);
+						}
+						if(try_token("&")) {
+							is_ref = true;
+							skipws(false);
+						} else {
+							back(1);
+						}
+						if(try_name()) {
+							// do not modify push_back order, or at least leave "param_end" first, as it is used as terminator
+							const std::string name = get(-1);
+							details_.push({ "param_end", "" });
+							details_.push({"is_ref", (is_ref ? "ref" : "") });
+							details_.push({"is_const", (is_const ? "const" : "") });
+							details_.push({"name", name});
+							details_.push({"type", type});
+						} else {
+							raise("expected NAME");
+						}
+						if(skipws(false).try_token(",")) {
+						} else if(back(1).try_token(")")) {
+							back(1); // next iterator will consume this token and break
+						} else {
+							raise("expected ',' or ')'");
+						}
+					} else {
+						raise("expected IDENTIFIER");
+					} // end if find identifier
+				} // end while not failed
+			} else {
+				raise("expected '('"); 
+			} // end if try_token("(")
+			
+			std::swap(stack_, stack_copy);
+			stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 		} else {
 			failed_++;
 		}
@@ -1222,14 +1295,38 @@ namespace cppcms { namespace templates {
 				p.reset().raise("expected %> after view definition");
 			}
 			p.pop();
-		} else if(p.reset().try_token_ws("template").try_name().skip_to("%>")) { // [ template, \s+, name, arguments, %> ]
+		} else if(p.reset().try_token_ws("template").try_name().try_param_list().try_close_expression()) { // [ template, \s+, name, arguments, %> ]
 			const std::string function_name = p.get(-3), arguments = p.get(-2);
+			expr::param_list_t::params_t params;
+			std::string name, type, is_const, is_ref;
+			while(!p.details().empty()) {
+				const auto top = p.details().top();
+				p.details().pop();
+				if(top.what == "name") {
+					name = top.item;
+				} else if(top.what == "type") {
+					type = top.item;
+				} else if(top.what == "is_const") {
+					is_const = top.item;
+				} else if(top.what == "is_ref") {
+					is_ref = top.item;
+				} else if(top.what == "param_end") {
+					params.push_back({ 
+							expr::make_identifier(type),
+							(is_const == "const"),
+							(is_ref == "ref"),
+							expr::make_name(name)
+					});
+				} else {
+					throw std::logic_error("bug: .what == " + top.what);
+				}
+			}
 			
 			// save to tree
 			current_ = current_->as<ast::view_t>().add_template(
 					expr::make_name(function_name),
 					p.line(),
-					expr::make_param_list(arguments));
+					expr::make_param_list(arguments, params));
 #ifdef PARSER_TRACE
 			std::cout << "global: template " << function_name << "\n";
 #endif
@@ -1628,7 +1725,7 @@ namespace cppcms { namespace templates {
 			const std::string right_of_varname = value_.substr(name_end);
 
 			
-			if(context.scope_variables.find(varname) == context.scope_variables.end()) {
+			if(!context.check_scope_variable(varname)) {
 				// variable not in local scope, so prefix it with content.
 				varname = "content." + varname;
 			}
@@ -1694,8 +1791,11 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 		
-		param_list_t::param_list_t(const std::string& input)
-			: base_t(trim(input)) {}
+		param_list_t::param_list_t(const std::string& input, const params_t& params)
+			: base_t(trim(input)) 
+			, params_(params) {}
+
+		const param_list_t::params_t& param_list_t::params() const { return params_; }
 
 		std::string param_list_t::repr() const {
 			return value_;
@@ -1753,8 +1853,8 @@ namespace cppcms { namespace templates {
 			return std::make_shared<call_list_t>(repr, prefix);
 		}
 		
-		param_list make_param_list(const std::string& repr) {
-			return std::make_shared<param_list_t>(repr);
+		param_list make_param_list(const std::string& repr, const param_list_t::params_t& params) {
+			return std::make_shared<param_list_t>(repr, params);
 		}
 		
 		std::ostream& operator<<(std::ostream& o, const name_t& obj) {
@@ -2001,8 +2101,15 @@ namespace cppcms { namespace templates {
 
 		void template_t::write(generator::context& context, std::ostream& o) {
 			o << ln(line()) << "virtual void " << name_->code(context) << arguments_->code(context) << "{\n";
+			for(const auto& param : arguments_->params()) {
+				context.add_scope_variable(param.name->code(context));
+			}
 			for(const base_ptr child : children) {
 				child->write(context, o);
+			}
+			
+			for(const auto& param : arguments_->params()) {
+				context.remove_scope_variable(param.name->code(context));
 			}
 			o << ln(endline_) << "} // end of template " << name_->code(context) << "\n";
 		}
@@ -2272,7 +2379,7 @@ namespace cppcms { namespace templates {
 		void include_t::write(generator::context& context, std::ostream& o) {
 			o << ln(line());
 			if(from_) {
-				if(context.scope_variables.find(from_->code(context)) == context.scope_variables.end()) {
+				if(!context.check_scope_variable(from_->code(context))) {
 					throw error_at_line("No local view variable " + from_->code(context) + " found in context.", line());
 				}
 				o << name_->code(context) << ";";
@@ -2490,11 +2597,11 @@ namespace cppcms { namespace templates {
 				o << "content";
 			}
 			o << ");\n";
-			context.scope_variables.insert(as_->code(context));
+			context.add_scope_variable(as_->code(context));
 			for(const base_ptr& child : children) {
 				child->write(context, o);
 			}
-			context.scope_variables.erase(as_->code(context));
+			context.remove_scope_variable(as_->code(context));
 			o << ln(endline_) << "}\n";
 		}
 				
@@ -2742,8 +2849,8 @@ namespace cppcms { namespace templates {
 			o << vtype <<" & " << item << " = *" << item << "_ptr;\n";
 			
 			if(rowid_) 
-				context.scope_variables.insert(rowid);
-			context.scope_variables.insert(item);
+				context.add_scope_variable(rowid);
+			context.add_scope_variable(item);
 			if(separator_) {
 				o << ln(separator_->line());
 				o << "if(" << item << "_ptr != " << array << ".begin()) {\n";
@@ -2753,8 +2860,8 @@ namespace cppcms { namespace templates {
 			item_->write(context, o);			
 
 			if(rowid_) 
-				context.scope_variables.erase(rowid);
-			context.scope_variables.erase(item);
+				context.remove_scope_variable(rowid);
+			context.remove_scope_variable(item);
 			o << ln(item_->endline()) << "} // end of item\n";
 
 			if(item_suffix_)
