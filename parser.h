@@ -44,6 +44,13 @@ namespace cppcms { namespace templates {
 
 			// configurables
 			std::string skin;
+			enum {
+				// levels
+				compat 				= 0x0,
+				magic1				= compat
+			};
+			int level;
+
 		private:
 			std::set<std::string> scope_variables;
 
@@ -547,13 +554,19 @@ namespace cppcms { namespace templates {
 		};
 	}
 
+	struct file_index_t {
+		const std::string filename;
+		const size_t beg, end;
+		const size_t line_beg, line_end;
+	};
 
 	class parser_source {
+		const std::pair<std::string, std::vector<file_index_t>> input_pair_;
 		const std::string input_;
 		size_t index_, line_;
-		const std::string filename_;
+		std::vector<file_index_t> file_indexes_;
 	public:
-		parser_source(const std::string& filename);
+		parser_source(const std::vector<std::string>& files);
 		void reset(size_t index, file_position_t line);
 
 		void move(int offset); // index_ += index_offset
@@ -610,7 +623,7 @@ namespace cppcms { namespace templates {
 		size_t failed_;
 	public:
 		file_position_t line() const;
-		explicit parser(const std::string& input);
+		explicit parser(const std::vector<std::string>& files);
 
 		parser& try_token(const std::string& token);
 		parser& try_token_ws(const std::string& token);
@@ -681,7 +694,7 @@ namespace cppcms { namespace templates {
 
 		ast::using_options_t parse_using_options(std::vector<std::string>&);
 	public:
-		template_parser(const std::string& input);
+		template_parser(const std::vector<std::string>& files);
 
 		void parse();
 

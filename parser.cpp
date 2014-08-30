@@ -255,6 +255,9 @@ namespace cppcms { namespace templates {
 
 	std::string readfile(const std::string& filename) {
 		std::ifstream ifs(filename);
+		if(!ifs)
+			throw std::runtime_error("unable to open file '" + filename + "'");
+
 		return std::string(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
 	}
 
@@ -274,11 +277,33 @@ namespace cppcms { namespace templates {
 		}
 	}
 
-	parser_source::parser_source(const std::string& filename)
-		: input_(readfile(filename))
+	std::pair<std::string, std::vector<file_index_t>> readfiles(const std::vector<std::string>& files) {
+		std::string content;
+		std::vector<file_index_t> indexes;
+		size_t all_lines = 0;
+		for(const std::string& fn : files) {
+			std::string part = readfile(fn);
+			if(part[part.length()-1] != '\n')
+				part += '\n';
+
+			size_t lines = 0;
+			for(const char c : part)
+				if(c == '\n')
+					lines ++;
+
+			indexes.push_back({fn, content.length(), content.length()+part.length(), all_lines, all_lines+lines});
+			all_lines += lines;
+			content += part;
+		}
+		return std::make_pair(content, indexes);
+	}
+
+	parser_source::parser_source(const std::vector<std::string>& files)
+		: input_pair_(readfiles(files))
+		, input_(input_pair_.first)
        		, index_(0)
 		, line_(1) 
-		, filename_(filename) {}
+		, file_indexes_(input_pair_.second) {}
 
 	void parser_source::reset(size_t index, file_position_t line) {
 		line_ = line.line;
@@ -369,13 +394,18 @@ namespace cppcms { namespace templates {
 	}
 
 	file_position_t parser_source::line() const {
-		return file_position_t { filename_, line_ };
+		for(const file_index_t& fi : file_indexes_) {
+			if(index_ >= fi.beg && index_ < fi.end) {
+				return file_position_t { fi.filename, line_ - fi.line_beg };
+			}
+		}
+		throw std::logic_error("bug: file index not found");
 	}
 
 	file_position_t parser::line() const { return source_.line(); }
 
-	parser::parser(const std::string& input)
-		: source_(input)
+	parser::parser(const std::vector<std::string>& files)
+		: source_(files)
        		, failed_(0) {}
 	
 	parser& parser::try_token(const std::string& token) {
@@ -957,8 +987,8 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	template_parser::template_parser(const std::string& input)
-		: p(input) 
+	template_parser::template_parser(const std::vector<std::string>& files)
+		: p(files) 
 		, tree_(std::make_shared<ast::root_t>()) 
 		, current_(tree_) {}
 		
@@ -1987,9 +2017,13 @@ namespace cppcms { namespace templates {
 		}
 
 		void root_t::write(generator::context& context, std::ostream& o) {
-			for(const code_t& code : codes) {
-				o << ln(code.line) << code.code->code(context) << std::endl;
+			// checks
+			// check if there is at least one skin
+			if(skins.empty()) {
+				throw std::runtime_error("No skins defined");
 			}
+
+			// check if there is no conflict between [ -s NAME ] argument and defined skins
 			auto i = skins.find(expr::name_t("__default__"));
 			if(i != skins.end()) {
 				if(context.skin.empty()) {
@@ -1999,6 +2033,11 @@ namespace cppcms { namespace templates {
 				}
 				skins.erase(i);
 			}
+			
+			for(const code_t& code : codes) {
+				o << ln(code.line) << code.code->code(context) << std::endl;
+			}
+
 			for(const skins_t::value_type& skin : skins) {
 				if(!context.skin.empty() && context.skin != skin.first.repr())
 					throw error_at_line("Mismatched skin names, in argument and template source", skin.second.line);
@@ -3014,18 +3053,53 @@ namespace cppcms { namespace templates {
 #include <streambuf>
 #include <fstream>
 
+void usage(const std::string& self) {
+	std::cerr << self << " [--code(default) | --ast | --parse ] [ -s SKIN NAME ] file1.tmpl file2.tmpl ...\n";
+	exit(1);
+}
+
 int main(int argc, char **argv) {
-	cppcms::templates::template_parser p(argv[1]);
-	p.parse();
-	if(std::string(argv[2]) == "--ast")
-		p.tree()->dump(std::cout);
-	else {
-		cppcms::templates::generator::context ctx;
-		ctx.variable_prefix = "content."; // TODO: load defaults
-		if(argc >= 4 && std::string(argv[3]) == "-s") {
-			ctx.skin = std::string(argv[4]);
+
+	std::vector<std::string> files;
+	cppcms::templates::generator::context ctx;
+	ctx.level = cppcms::templates::generator::context::compat; // TODO: configurable
+	ctx.variable_prefix = "content."; // TODO: load defaults
+	enum { code, ast, parse } mode = code;
+
+	for(int i=1;i<argc;++i) {
+		const std::string v(argv[i]);
+		if(v == "--code") {
+			mode = code;
+		} else if(v == "--ast") {
+			mode = ast;
+		} else if(v == "--parse") {
+			mode = parse;
+		} else if(v == "-s") {
+			if(i == argc) {
+				usage(argv[0]);
+			} else {
+				ctx.skin = argv[i+1];
+				++i;
+			}
+		} else {
+			files.emplace_back(argv[i]);
 		}
-		p.write(ctx, std::cout);
 	}
+
+	if(files.empty())
+		usage(argv[0]);
+	
+	cppcms::templates::template_parser p(files);
+	p.parse();
+	if(mode == ast) {
+		p.tree()->dump(std::cout);
+	} else if(mode == code) {
+		p.write(ctx, std::cout);
+	} else {
+		std::ostringstream oss;
+		p.write(ctx, oss);
+		std::cout << "parse: ok\n";
+	}
+
 	return 0;
 }

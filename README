@@ -1,0 +1,5 @@
+Known generated code differences (from original cppcms_tmpl_cc), using compat mode:
+	tests/tutorial-2*.tmpl-x - tests/tutorial-2.diff
+		#include moved to first line (when parsing multiple files)
+		collaped skin namespace(closing, opening the same namespace)
+		whitespaces before '^' and <% item %> not trimmed

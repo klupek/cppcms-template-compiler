@@ -1,0 +1,55 @@
+--- tests/tutorial-2.expected.cpp	2014-08-30 23:58:08.193205652 +0200
++++ tmp/tutorial-2.cpp	2014-08-31 00:32:56.576101768 +0200
+@@ -1,3 +1,5 @@
++#line 1 "tests/tutorial-2-master.tmpl-x"
++#include "content.h"
+ #line 1 "tests/tutorial-2-intro.tmpl-x"
+ namespace myskin {
+ #line 2 "tests/tutorial-2-intro.tmpl-x"
+@@ -30,13 +32,6 @@
+ 	}			// end of template page_content
+ #line 7 "tests/tutorial-2-intro.tmpl-x"
+     };				// end of class intro
+-#line 8 "tests/tutorial-2-intro.tmpl-x"
+-}				// end of namespace myskin
+-
+-#line 1 "tests/tutorial-2-master.tmpl-x"
+-#include "content.h"
+-#line 2 "tests/tutorial-2-master.tmpl-x"
+-namespace myskin {
+ #line 3 "tests/tutorial-2-master.tmpl-x"
+     struct master:public cppcms::base_view
+ #line 3 "tests/tutorial-2-master.tmpl-x"
+@@ -83,11 +78,6 @@
+ 	}			// end of template render
+ #line 19 "tests/tutorial-2-master.tmpl-x"
+     };				// end of class master
+-#line 20 "tests/tutorial-2-master.tmpl-x"
+-}				// end of namespace myskin
+-
+-#line 1 "tests/tutorial-2-news.tmpl-x"
+-namespace myskin {
+ #line 2 "tests/tutorial-2-news.tmpl-x"
+     struct news:public master
+ #line 2 "tests/tutorial-2-news.tmpl-x"
+@@ -117,7 +107,7 @@
+ #line 5 "tests/tutorial-2-news.tmpl-x"
+ 	    if ((content.news_list).begin() != (content.news_list).end()) {
+ #line 7 "tests/tutorial-2-news.tmpl-x"
+-		out() << "  \n    <ul>  \n";
++		out() << "  \n    <ul>  \n    ";
+ #line 7 "tests/tutorial-2-news.tmpl-x"
+ 		for (CPPCMS_TYPEOF((content.news_list).begin())message_ptr
+ 		     = (content.news_list).begin(), message_ptr_end =
+@@ -143,11 +133,6 @@
+ 	}			// end of template page_content
+ #line 13 "tests/tutorial-2-news.tmpl-x"
+     };				// end of class news
+-#line 14 "tests/tutorial-2-news.tmpl-x"
+-}				// end of namespace myskin
+-
+-#line 1 "tests/tutorial-2-page.tmpl-x"
+-namespace myskin {
+ #line 2 "tests/tutorial-2-page.tmpl-x"
+     struct page:public master
+ #line 2 "tests/tutorial-2-page.tmpl-x"
