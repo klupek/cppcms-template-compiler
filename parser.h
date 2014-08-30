@@ -701,6 +701,7 @@ namespace cppcms { namespace templates {
  * 	form	
  * 		additional form rendering engines should be registerable, 'form' NAME VARIABLE 
  * magic to do:
+ * 	namespace cppcms { namespace views { struct display_traits<mytype> { ...
  * 	collapsing all-whitespace strings in add_html()
  * 	form templates
  * 		skin, view, blah, blah, 
