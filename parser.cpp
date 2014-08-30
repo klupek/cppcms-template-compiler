@@ -1194,10 +1194,10 @@ namespace cppcms { namespace templates {
 				p.back(4);
 			}
 
-			if(p.try_token_ws("on").try_token_ws("miss").try_variable()) { // TODO: () is required at the end of expression, but try_variable already consumes it
-				miss = expr::make_variable(p.get(-1));
+			if(p.try_token_ws("on").try_token_ws("miss").try_variable_ws()) { // TODO: () is required at the end of expression, but try_variable already consumes it
+				miss = expr::make_variable(p.get(-2));
 			} else {
-				p.back(5);
+				p.back(6);
 			}
 
 			if(p.try_token_ws("no").try_token_ws("triggers")) {
@@ -2976,7 +2976,27 @@ namespace cppcms { namespace templates {
 			o << p << "]\n";
 		}
 		
-		void cache_t::write(generator::context& context, std::ostream& /* o */) {
+		void cache_t::write(generator::context& context, std::ostream& o) {
+			o << ln(line()) << "{\n" << "std::string _cppcms_temp_val;\n";
+			o << ln(line()) << "\tif (content.app().cache().fetch_frame(" << name_->code(context) << ", _cppcms_temp_val))\n";
+			o << ln(line()) << "\t\tout() << _cppcms_temp_val;\n";
+			o << ln(line()) << "\telse {";
+			o << ln(line()) << "\t\tcppcms::copy_filter _cppcms_cache_flt(out());\n";
+			if(recording_) {
+				o << ln(line()) << "\t\tcppcms::triggers_recorder _cppcms_trig_rec(content.app().cache());\n";
+			}
+			if(miss_) {
+				o << ln(line()) << "\t\t" << miss_->code(context) << ";\n";
+			}
+			has_children::write(context, o);
+			o << ln(endline()) << "content.app().cache().store_frame(" << name_->code(context) << ", _cppcms_cache_flt.detach(),";
+			if(recording_)
+				o << "_cppcms_trig_rec.detach(),";
+			else
+				o << "std::set <std::string > (),";
+			o << duration_ << ", " << (triggers_ ? "false" : "true")  << ");\n";
+			o << ln(endline()) << "\t}} // cache\n";
+
 		}
 		
 		base_ptr cache_t::end(const std::string& what,file_position_t line) {

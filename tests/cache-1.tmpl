@@ -1,0 +1,37 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+		<% cache "sidebar" for 10 %>   
+			...  
+		<% end cache %>  
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			<% cache "foo" %>  
+				foof
+				<% cache "bar" %>  
+				barr
+				<% end %>  
+			<% end %> 
+			bar foo
+			<% a %> + <% b %> = <% c++ out()<<content.a+content.b; %>  
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+			<% cache "foo" %>  
+				foof
+				<% cache "bar" no triggers %>  
+					barr nt
+				<% end %>  
+			<% end %>  
+		<% end template %>
+		<% template t1() %>
+			<% cache "foo" on miss load_data() %>  
+				...  xx
+			<% end %> 
+		<% end %>
+		<% template t1() %>
+			<% cache "foo" on miss load_data() no recording %>  
+				...  xx
+			<% end %> 
+		<% end %>
+	<% end view %> 
+<% end %>  
