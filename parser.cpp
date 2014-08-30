@@ -1988,7 +1988,7 @@ namespace cppcms { namespace templates {
 
 		void root_t::write(generator::context& context, std::ostream& o) {
 			for(const code_t& code : codes) {
-				o << ln(code.line) << code.code << std::endl;
+				o << ln(code.line) << code.code->code(context) << std::endl;
 			}
 			auto i = skins.find(expr::name_t("__default__"));
 			if(i != skins.end()) {
