@@ -1,0 +1,37 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %>  
+			<% if not empty name %>  
+				<h1>Hello <%= name %></h1>  
+				<p>You are <%= sex %>, <%= state %></p>  
+				<p>Your age is <%= age %></p>  
+			<% else %>  
+				<h1>Input your details</h1>  
+			<% end %>  
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			<form method="post" action="" >  
+				<% form as_p info %>  
+			</form> 
+			<h1>Factorial Calculator</h1>  
+			<h2><%= arg %>! = <%= fact %></h2>  
+			<form method="post" action="" >  
+			<% form as_p info %>  
+			</form>   
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+			<form method="post" action="" ><% csrf %>  
+				<% form as_p info %>  
+			</form>
+			<h1>Hello <%= who %> <%= name %></h1>  
+			<% if (content.age != -1.0) %>  
+				<p>Your age is <%= age %></p>  
+				<h2>Change details</h2>  
+			<% else %>  
+				<h2>Input your details</h2>  
+			<% end %>  
+			<form method="post" action="" >  
+			<% form as_p info %>  
+		<% end template %>
+	<% end view %> 
+<% end %>  

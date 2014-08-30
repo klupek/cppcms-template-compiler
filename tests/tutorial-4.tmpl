@@ -1,0 +1,43 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %> 
+		<html>  
+			<head>  
+				<meta http-equiv="Content-Type" content="text/html; charset=utf-8" >  
+			</head>  
+			<% if rtl %>  
+			<body dir="rtl">  
+			<% else %>  
+			<body>  
+			<% end %>  
+			<h1><% gt "We want to say" %></h1>  
+			<p><%= message %></p>  
+			<p><a href="he_IL">he</a>/<a href="en_US">en</a></p>  
+			</body>  
+		<html>  
+		<% end template %>
+		<% template foo() %>  
+			<html>  
+			...  
+			<body>  
+
+			<% cache "sidebar" %>  
+			<div id="sidebar">  
+			...  
+			</div>  
+			<% end cache %>  
+			...  
+			</body>  
+			</html>  
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			<% cache "sidebar" on miss update_content() %>  
+			<div id="sidebar">  
+			...  
+			</div>  
+			<% end cache %>  
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+		<% end template %>
+	<% end view %> 
+<% end %>  
