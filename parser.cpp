@@ -1030,13 +1030,17 @@ namespace cppcms { namespace templates {
 						if(!try_variable_expression()) {
 							p.raise("expected variable expression");
 						}
-					} else if(p.reset().skipws(true)) { // [ <html><blah>..., <%, \s+ ] = 3
+					} else if(p.reset().skipws(false)) { // [ <html><blah>..., <%, \s+ ] = 3
 						if(!try_flow_expression() && !try_global_expression() && !try_render_expression()) {
 							// compat
 							if(!try_variable_expression()) {
 								p.raise("expected c++, global, render or flow expression or (deprecated) variable expression");
+							} else {
+								std::cerr << "WARNING: do not use deprecated variable syntax <% var %> at line " << p.line().filename << ":" << p.line().line << std::endl;
 							}
 						} 
+					} else {
+						p.raise("expected c++, global, render or flow expression or (deprecated) variable expression");
 					}
 					p.pop();
 				} else if(p.reset().skip_to("%>")) {
@@ -1048,6 +1052,9 @@ namespace cppcms { namespace templates {
 					add_html(p.get(-1));
 				} else {
 					p.reset().raise("expected <%=, <% or EOF");
+				}
+				if(!p) {
+					p.raise("syntax error"); // FIXME: make all paths throw its own errors
 				}
 				p.pop();
 			}
@@ -1187,15 +1194,15 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "flow: separator\n";
 #endif
-		} else if(p.reset().try_token_ws("end")) {
+		} else if(p.reset().try_token("end")) {
 			std::string what;
-			if(p.try_name_ws()) {
+			if(p.skipws(true).try_name_ws()) {
 				what = p.get(-2);
 			} else {
-				p.back(2);
+				p.back(3);
 			}
 			if(!p.try_close_expression()) {
-				p.raise("expected %> after end [whatever]");
+				p.raise("expected %> after end " + what);
 			}
 			
 			// action
@@ -1427,7 +1434,7 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_render_expression() {
 		p.push();
-		if(p.try_token_ws("gt").try_string_ws() || p.back(4).try_token_ws("pgt").try_string_ws()) { // [ gt|pgt, \s+, string, \s+ ]
+		if(p.try_token("gt").skipws(false).try_string_ws() || p.back(4).try_token_ws("pgt").try_string_ws()) { // [ gt|pgt, \s+, string, \s+ ]
 			const std::string verb = p.get(-4);
 			const expr::string fmt = expr::make_string(p.get(-2));
 			std::vector<std::string> variables;
@@ -1610,8 +1617,8 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_variable_expression() {
 		p.push();
 		if(p.try_complex_variable().skipws(false).try_close_expression()) { // [ variable expression, \s*, %> ]
-			const expr::variable expr = expr::make_variable(p.details().top().item);
-			std::vector<expr::filter> filters;
+			const expr::variable expr = expr::make_variable(p.details().top().item);			
+			std::vector<expr::filter> filters;			
 			p.details().pop();
 			while(!p.details().empty() && p.details().top().what == "complex_variable") {
 				filters.emplace_back(expr::make_filter(p.details().top().item));
@@ -2763,7 +2770,7 @@ namespace cppcms { namespace templates {
 				endline_ = line;
 				return parent()->parent(); // this <- if_t <- if_parent, aka end if statement
 			} else {
-				throw std::runtime_error("expected 'end if', not 'end '" + what + "'");
+				throw std::runtime_error("expected 'end if', not 'end " + what + "', if started at line " + this->line().filename + ":" + boost::lexical_cast<std::string>(this->line().line));
 			}
 		}
 		

@@ -1,0 +1,114 @@
+<% c++ #include "content.h" %>
+<% xhtml %>
+<% skin view %>
+<% view master uses content::master %>
+<% template title() %><% gt "Wellcome to WikiPP" %><% end %>
+<% template navigation() %>
+<a href="<%= login_link %>"><span id="loginout"></span></a>
+&nbsp;/&nbsp;
+<a href="<%= edit_options %>"><% gt" Users Area" %></a>
+<% end template %>
+<% template navbar() %>
+<%= about | ext markdown %>
+<hr/>
+<h2><% gt "Navigation" %></h2>
+<ul>
+	<li><a href="<%= toc %>"><% gt "Index" %></a></li>
+	<li><a href="<%= changes %>"><% gt "Changes" %></a></li>
+</ul>
+<% foreach l in languages %>
+<h2><% gt "Main Page" %></h2>
+<ul>
+<% item %><li><a href="<%= l.second %>"><%= l.first %></a></li><% end %>
+</ul>
+<% end %>
+<% end template %>
+<% template main() %><% end %>
+<% template wiki_title() %><%= wiki_title %><% end %>
+<% template sidebar() %><% end %>
+<% template render() %>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title><% include title() %></title>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<link href="<%= media %>/style.css" rel="stylesheet" type="text/css" />
+	<% if not empty syntax_highlighter %>
+		<script language="javascript"  src="<%= media %>/sh/Scripts/shCore.js"></script>
+		<script language="javascript"  src="<%= media %>/sh/Scripts/shBrushCpp.js"></script>
+		<link href="<%= media %>/sh/Styles/SyntaxHighlighter.css" rel="stylesheet" type="text/css" />
+	<% end %>
+	<link href="<%= media %>/style-<% if rtl %>rtl<% else %>ltr<%end%>.css" rel="stylesheet" type="text/css" />
+</head>
+<body onload="loginout()">
+	<script type="text/javascript">
+	<!--
+                function get_cookie(c_name)
+                {
+                	c_name='<%= cookie_prefix %>' + c_name; 
+                        if (document.cookie.length>0){
+                                c_start=document.cookie.indexOf(c_name + "=");
+                                if (c_start!=-1){ 
+                                        c_start=c_start + c_name.length+1; 
+                                        c_end=document.cookie.indexOf(";",c_start);
+                                        if (c_end==-1) c_end=document.cookie.length;
+                                                return decodeURIComponent(document.cookie.substring(c_start,c_end));
+                                } 
+                        }
+                        return "";
+                }
+		function loginout(){
+			var element=document.getElementById('loginout');
+			var username=get_cookie('username');
+			if(username=='')  {
+				element.innerHTML='<% gt "Login" %>';
+			}
+			else {
+				element.innerHTML='<% gt "Logout " %>('+username+')';
+			}
+		}
+		-->
+	</script>
+<div id="page" >
+	<div id="header">
+		<h1 id="title"><% include wiki_title() %></h1>
+	</div>
+	<div id="path">
+		<a href="<%= main_local %>"><% gt "Main" %></a>
+		&nbsp;/&nbsp;
+		<% include navigation()%>
+	</div>
+	<div id="maincontent">
+		<h1><% include title() %></h1>
+		<% include main() %>
+	</div>
+	<div id="sidecontent">
+		<% include navbar() %>
+		<% include sidebar() %>
+		<hr/>
+		<p><a href="http://jigsaw.w3.org/css-validator/check/referer"><% gt "Valid CSS" %></a> 
+		| <a href="http://validator.w3.org/check?uri=referer"><% gt "Valid XHTML 1.0" %></a>
+		</p>
+	</div>
+	<div id="footer">
+		<div id="copyrightdesign">
+		<%= copyright %> | <% gt "Template design based on <a href=\"http://ContentedDesigns.com\">Contented Designs</a>" %>
+		</div>
+		<div id="footercontact">
+		<a href="<%= contact %>"><% gt "Contact" %></a>
+		</div>
+	</div>
+</div>
+	<% if not empty syntax_highlighter %>
+	<script language="javascript" >
+	<!--
+	dp.SyntaxHighlighter.HighlightAll('code');
+	-->
+	</script>
+	<% end %>
+</body>
+</html>
+<% end template %>
+<% end view %>
+<% end skin %>

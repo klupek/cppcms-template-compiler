@@ -1,0 +1,47 @@
+<% skin view %>
+<% view login uses content::login extends master %>
+<% template title() %><% gt "WikiPP :: Login" %><% end %>
+<% template main() %>
+<form action="" method="post"><% csrf %>
+<table>
+<% form as_table form %>
+</table>
+</form>
+<% if not empty new_user %>
+	<p><strong><a href="<%= new_user %>"><% gt "Register as new user" %></a></strong></p>
+<% end %>
+<% end template %>
+<% end view %>
+<% view new_user uses content::new_user extends master %>
+<% template title() %><% gt "WikiPP :: Register" %><% end %>
+<% template main() %>
+<script type="text/javascript"><!--
+	document.write('<fo')
+	document.write('rm act')
+	document.write('ion="" m')
+	document.write('ethod="po')
+	document.write('st">')
+	-->
+</script>
+<% csrf %>
+<table>
+<% form as_table form %>
+</table>
+<script type="text/javascript"><!--
+	document.write('</fo')
+	document.write('rm>')
+	-->
+</script>
+<% end template %>
+<% end view %>
+<% view edit_options uses content::edit_options extends master %>
+<% template title() %><% gt "WikiPP :: Edit Options" %><% end %>
+<% template main() %>
+<form action="" method="post"><% csrf %>
+<table style="width:100%" >
+<% form as_table form %>
+</table>
+</form>
+<% end template %>
+<% end view %>
+<% end skin %>

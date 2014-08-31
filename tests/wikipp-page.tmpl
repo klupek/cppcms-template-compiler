@@ -1,0 +1,122 @@
+<% skin view %>
+<% view page uses content::page extends master %>
+<% template sidebar() %>
+	<% if not empty sidebar %>
+	<hr/>
+	<div id="navbar_links" >
+		<%= sidebar | ext markdown %>
+	</div>
+	<% end %>
+<% end %>
+<% template title() %><%= title %><% end %>
+<% template navigation() %>
+<% if not empty edit_link %>
+<a href="<%= edit_link %>"><% gt "Edit" %></a>
+&nbsp;/&nbsp;
+<a href="<%= history_link %>"><% gt "History" %></a>
+&nbsp;/&nbsp;
+<% end %>
+<% include master::navigation() %>
+<% end template %>
+<% template main() %>
+<%= content | ext markdown %>
+<% end %>
+<% end view %>
+<% view edit_page uses content::edit_page extends page %>
+<% template title() %><% if new_page %><% gt "New Article" %><% else %><% gt "Edit" %><% if not empty title %>:<%= title %><% end %><% end %><% end %>
+<% template navigation() %>
+<% if not empty edit_link %>
+<a href="<%= back %>"><% gt "Back to page" %></a>
+&nbsp;/&nbsp;
+<a href="<%= history_link %>"><% gt "History" %></a>
+&nbsp;/&nbsp;
+<% end %>
+<% include master::navigation() %>
+<% end template %>
+<% template main() %>
+<% if not empty title %>
+	<% include page::main() %>
+<% end %>
+	<script type="text/javascript">
+	<!--
+		document.write('<for')
+		document.write('m actio')
+		document.write('n="')
+		document.write('<%= submit %>" me')
+		document.write('thod="po')
+		document.write('st">')
+	-->
+	</script>
+	<% csrf %>
+	<table>
+	<% form as_table form.fields %>
+	</table>
+	<p><% form as_space form.buttons %></p>
+	<script type="text/javascript">
+	<!-- 
+		document.write('</fo')
+		document.write('rm>')
+	-->
+	</script>
+<% end template %>
+<% end view %>
+<% view page_hist uses content::page_hist extends page %>
+<% template title() %>
+<% include page::title() %> 
+<% end template %>
+<% template navigation() %>
+	<a href="<%= rollback %>"><% gt "Edit this version (rollback)" %></a>
+	&nbsp;/&nbsp;
+	<% include page::navigation() %>
+<% end template %>
+<% template main() %>
+<div class="published"><% gt "(version {1,num}, from {2,dt=s})" using version, date %></div>
+<% include page::main() %>
+<% end template %>
+<% end view %>
+<% view diff uses content::diff extends master %>
+<% template title() %><% gt "Difference \"{1}\" ver. {2} versus ver. {3}" using title,v1,v2 %><% end template %>
+<% template navigation() %>
+	<a href="<%= edit_v1 %>"><% gt "Edit version {1,num}" using v1 %></a>
+	&nbsp;/&nbsp;
+	<a href="<%= edit_v2 %>"><% gt "Edit version {1,num}" using v2 %></a>
+	&nbsp;/&nbsp;
+	<% include master::navigation() %>
+<% end template %>
+<% template show_diff(content::diff_t &content) %>
+<table style="width:100%" >
+	<% foreach r in content %>
+	<% item %>
+	<tr class="<% if (r.first<0) %>d_del<% elif (r.first>0) %>d_add<% else %>d_no<% end %>" >
+		<td><code><%= r.second %></code></td>
+	</tr>
+	<% end %>
+	<% end %>
+</table>
+<% end template %>
+<% template main() %>
+<% if no_versions %>
+	<h2><% gt "No such page or version exist" %></h2>
+<% elif no_diff %>
+	<h2><% gt "No difference between these versions" %></h2>
+<% else %>
+	<% if title_diff %>
+	<h2><% gt "Titles" %>:</h2>
+	<table style="width:100%">
+	<tr><th><% gt "Version {1}" using v1 %></th><th><% gt "Version {1}" using v2 %></th>
+	<tr><td><%= title_1 %></td><td><%= title_2 %></td></tr>
+	</table>
+	<% end %>
+	<% if content_diff %>
+		<h2><% gt "Content" %>:</h2>
+		<% include show_diff(content_diff_content) %>
+	<% end %>
+	<% if sidebar_diff %>
+		<h2><% gt "Sidebar" %>:</h2>
+		<% include show_diff(sidebar_diff_content) %>
+	<% end %>
+	</table>
+<% end %>
+<% end template %>
+<% end view %>
+<% end skin %>

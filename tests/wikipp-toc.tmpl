@@ -1,0 +1,44 @@
+<% c++ #include "content.h" %>
+<% skin view %>
+<% view toc uses content::toc extends master %>
+<% template title() %><% gt "Index of Articles" %><% end %>
+<% template main() %>
+<% foreach row in table %>
+<table id="toc_table">
+	<% item %>
+	<tr>
+		<% foreach cell in row %>
+		<% item %>
+			<% if not empty cell.title %>
+				<td><a href="<%= cell.url %>"><%= cell.title %></a>
+			<% else %>
+				<td>&nbsp;</td>
+			<% end %>
+		<% end item %>
+		<% end %>
+	</tr>
+	<% end item %>
+</table>
+<% end foreach %>
+<% end template %>
+<% end view %>
+<% view recent_changes uses content::recent_changes extends master %>
+<% template title() %><% gt "Recent Changes" %><% end %>
+<% template main() %>
+<% foreach c in content %>
+	<ul>
+	<% item %>
+	<li><a href="<%= c.url %>"><%= c.title %></a> &mdash; 
+		<% gt "version {1,num}, at {2,dt=s}, by {3}" using c.version,c.created,c.author %><% if not empty c.diff_url %>, 
+			<a href="<%= c.diff_url %>"><% gt "Diff to previous" %></a><% end %>
+
+	</li>
+	<% end item %>
+	</ul>
+	<% if not empty next %><p><a href="<%= next %>"><% gt "Next Page" %></a></p><% end %>
+<% empty %>
+<h2><% gt "No more changes" %></h2>
+<% end %>
+<% end template %>
+<% end view %>
+<% end skin %>
