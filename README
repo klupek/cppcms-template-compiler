@@ -18,7 +18,7 @@ Known generated code differences (from original cppcms_tmpl_cc), using compat mo
 
 
 Tests:
-	Please checkout tests submodule. I am not a laywer and i have no idea about their licesens.
+	Please checkout tests submodule.
 	Running: ./runtests 
 	tests/cppblog-admin-caching.tmpl was fixed:
 		original:
