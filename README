@@ -14,11 +14,12 @@ Known generated code differences (from original cppcms_tmpl_cc), using compat mo
 	tests/tutorial-2*.tmpl-x - tests/tutorial-2.diff
 		#include moved to first line (when parsing multiple files)
 		collaped skin namespace(closing, opening the same namespace)
-		whitespaces before '^' and <% item %> not trimmed
+		whitespaces between '^' and <% item %> not trimmed
 
 
 Tests:
-	All test files are used as DATA, not CODE, therefore they do not infect code with licenses..
+	Please checkout tests submodule. I am not a laywer and i have no idea about their licesens.
+	Running: ./runtests 
 	tests/cppblog-admin-caching.tmpl was fixed:
 		original:
 			<% template master_content() %>
@@ -27,18 +28,5 @@ Tests:
 			<% template master_content() %>
 			<div id="form">
 
-License(s):
-	tests/cppblog-*.tmpl are distributed under some GPL license, the same license cppblog is (not specified in sources/svn)
-		source: svn co https://cppcms.svn.sourceforge.net/svnroot/cppcms/blog/trunk cppblog
-	tests/wikipp-*.tmpl seem to be distributed under GPL3 license.
-		source: svn co https://cppcms.svn.sourceforge.net/svnroot/cppcms/wikipp/trunk wikipp
-	tests/examples-*.tmpl seem to be distributed under LGPL3 license.
-		source: http://sourceforge.net/projects/cppcms/files/
-	test files: 	cache-1.tmpl foreach-1.tmpl form-1.tmpl if-1.tmpl include-1.tmpl internationalization-1.tmpl render-1.tmpl 
-			template-1.tmpl top-1.tmpl top-2.tmpl top-3.tmpl tutorial-1.tmpl tutorial-3.tmpl tutorial-4.tmpl url-1.tmpl 
-			using-1.tmpl variables-1.tmpl
-		contain code from cppcms tutorial and they seem to be licensed under GFDL
-		source: http://cppcms.com/wikipp/en/page/cppcms_1x_templates
-	
-	everything else in this project: MIT
+License: MIT
 	
