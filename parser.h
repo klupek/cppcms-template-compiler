@@ -626,6 +626,14 @@ namespace cppcms { namespace templates {
 		std::string left_context_from(size_t beg) const;
 	};
 
+	class token_sink {		
+		std::string* target_;
+	public:
+		token_sink(std::string&);
+		token_sink();
+		void put(const std::string&);
+	};
+
 	class parser {
 		parser_source source_;
 		struct state_t {
@@ -652,35 +660,34 @@ namespace cppcms { namespace templates {
 		parser& try_token(const std::string& token);
 		parser& try_token_ws(const std::string& token);
 		parser& try_token_nl(const std::string& token);
+		parser& try_one_of_tokens(const std::vector<std::string>& tokens, token_sink out = token_sink());
 
 
-		parser& try_name(); // -> [ NAME ]
-		parser& try_name_ws(); // -> [ NAME, \s+ ]
-		parser& try_string(); // -> [ STRING, ]
-		parser& try_string_ws(); // -> [ STRING, \s+ ]
-		parser& try_number(); // -> [ NUMBER ]
-		parser& try_number_ws(); // -> [ NUMBER, \s+ ]
-		parser& try_variable(); // -> [ VAR ]
-		parser& try_variable_ws(); // -> [ VAR, \s+ ]
-		parser& try_complex_variable(); // -> [ CVAR ]
-		parser& try_complex_variable_ws(); // -> [ CVAR, \s+ ]
-		parser& try_filter(); // -> [ FILTER ]
+		parser& try_name(token_sink out = token_sink()); // -> [ NAME ]
+		parser& try_name_ws(token_sink out = token_sink()); // -> [ NAME, \s+ ]
+		parser& try_string(token_sink out = token_sink()); // -> [ STRING, ]
+		parser& try_string_ws(token_sink out = token_sink()); // -> [ STRING, \s+ ]
+		parser& try_number(token_sink out = token_sink()); // -> [ NUMBER ]
+		parser& try_number_ws(token_sink out = token_sink()); // -> [ NUMBER, \s+ ]
+		parser& try_variable(token_sink out = token_sink()); // -> [ VAR ]
+		parser& try_variable_ws(token_sink out = token_sink()); // -> [ VAR, \s+ ]
+		parser& try_complex_variable(token_sink out = token_sink()); // -> [ CVAR ]
+		parser& try_complex_variable_ws(token_sink out = token_sink()); // -> [ CVAR, \s+ ]
+		parser& try_filter(token_sink out = token_sink()); // -> [ FILTER ]
 		parser& try_comma(); // [ ',' ]
-		parser& try_argument_list(); // [ argument_list ]
-		parser& try_param_list(); // [ param_list ]
-		parser& try_identifier(); // -> [ ID ]
-		parser& try_identifier_ws(); // -> [ ID, \s+ ]
-		parser& skip_to(const std::string& token); // -> [ prefix, token ]
+		parser& try_argument_list(token_sink out = token_sink()); // [ argument_list ]
+		parser& try_param_list(token_sink out = token_sink()); // [ param_list ]
+		parser& try_identifier(token_sink out = token_sink()); // -> [ ID ]
+		parser& try_identifier_ws(token_sink out = token_sink()); // -> [ ID, \s+ ]
+		parser& skip_to(const std::string& token, token_sink out = token_sink()); // -> [ prefix, token ]
 		parser& skipws(bool require, bool add_to_stack = true); // -> [ \s* ]
-		parser& skip_to_end(); // -> [ ... ]
-		parser& try_parenthesis_expression(); // [ ... ]
+		parser& skip_to_end(token_sink out = token_sink()); // -> [ ... ]
+		parser& try_parenthesis_expression(token_sink out = token_sink()); // [ ... ]
 
 		// input: skip any whitespaces, find '%>' or '% >'
 		// stack: add '%>' or '% >'
 		parser& try_close_expression(); // %> and variations 
 		
-		template<typename T=std::string>
-		T get(int n);
 		bool failed() const;
 		bool finished() const;
 		operator bool() const;
@@ -695,21 +702,6 @@ namespace cppcms { namespace templates {
 		parser& reset();
 		void pop();
 	};
-
-	template<typename T>
-	T parser::get(int n) {
-		if(failed_) {
-			throw std::logic_error("Attempt to get value from failed parser");
-		} else if(static_cast<size_t>(-n) > stack_.size()) {
-			throw std::logic_error("Value index too large");
-		} else if(n >= 0) {
-			throw std::logic_error("get(n>=0) is invalid");
-		} else {
-			return boost::lexical_cast<T>(stack_[stack_.size()+n].token);
-		}
-	}
-
-
 
 	class template_parser {
 		parser p;

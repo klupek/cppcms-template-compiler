@@ -429,6 +429,17 @@ namespace cppcms { namespace templates {
 
 	file_position_t parser::line() const { return source_.line(); }
 
+	token_sink::token_sink(std::string& dst)
+		: target_(&dst) {}
+
+	token_sink::token_sink() 
+		: target_(nullptr) {}
+
+	void token_sink::put(const std::string& what) {
+		if(target_ != nullptr)
+			*target_ = what;
+	}
+
 	parser::parser(const std::vector<std::string>& files)
 		: source_(files)
        		, failed_(0) {}
@@ -448,6 +459,21 @@ namespace cppcms { namespace templates {
 		}
 		return *this;
 	}
+
+	parser& parser::try_one_of_tokens(const std::vector<std::string>& tokens, token_sink out) {
+		if(!failed_) {
+			auto i = tokens.begin();
+			try_token(*i++);
+			while(failed_ && i != tokens.end()) {
+				back(1).try_token(*i++);
+			}
+			if(!failed_)
+				out.put(*--i);
+		} else {
+			failed_++;
+		}
+		return *this;
+	}
 	
 	parser& parser::try_close_expression() {
 		if(!failed_) {
@@ -461,7 +487,7 @@ namespace cppcms { namespace templates {
 	}
 
 	/* NAME is a sequence of Latin letters, digits and underscore starting with a letter. They represent identifiers and can be defined by regular expression such as: [a-zA-Z][a-zA-Z0-9_]* */
-	parser& parser::try_name() {
+	parser& parser::try_name(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find name at '" << source_.right_context(20) << "'\n";
 #endif
@@ -470,6 +496,7 @@ namespace cppcms { namespace templates {
 			char c = source_.current();
 			if(is_latin_letter(c) || c == '_') {
 				for(;source_.has_next() && ( is_latin_letter(c) || is_digit(c) || c == '_'); c = source_.next());
+				out.put(source_.left_context_from(start));
 				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> name " << stack_.back().token << std::endl;
@@ -483,7 +510,7 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::try_string() {
+	parser& parser::try_string(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find string at '" << source_.right_context(20) << "'\n";
 #endif
@@ -505,6 +532,7 @@ namespace cppcms { namespace templates {
 				} else {
 					source_.next();
 					stack_.emplace_back(state_t { start, source_.left_context_from(start) }); 
+					out.put(source_.left_context_from(start));
 #ifdef PARSER_DEBUG
 					std::cout << ">>> string " << stack_.back().token << std::endl;
 #endif
@@ -522,7 +550,7 @@ namespace cppcms { namespace templates {
 	}
 
 	// NUMBER is a number -- sequence of digits that may start with - and include .. It can be defined by the regular expression: \-?\d+(\.\d*)?
-	parser& parser::try_number() {		
+	parser& parser::try_number(token_sink out) {		
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find number at '" << source_.right_context(20) << "'\n";
 #endif
@@ -539,6 +567,7 @@ namespace cppcms { namespace templates {
 						dot = true;
 				}
 				stack_.emplace_back(state_t{ start, source_.left_context_from(start) });				
+				out.put(source_.left_context_from(start));
 #ifdef PARSER_DEBUG
 				std::cout << ">>> string " << stack_.back().token << std::endl;
 #endif
@@ -553,7 +582,7 @@ namespace cppcms { namespace templates {
 
 	// VARIABLE is non-empty sequence of NAMES separated by dot "." or "->" that may optionally end with () or begin with * for 
 	// identification of function call result. No blanks are allowed. For example: data->point.x, something.else() *foo.bar.	
-	parser& parser::try_variable() {
+	parser& parser::try_variable(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find var at '" << source_.right_context(20) << "'\n";
 #endif
@@ -590,6 +619,7 @@ namespace cppcms { namespace templates {
 					back(1);
 				}
 				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
+				out.put(source_.left_context_from(start));
 #ifdef PARSER_DEBUG
 				std::cout << ">>> var " << stack_.back().token << std::endl;
 #endif
@@ -603,25 +633,27 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::try_complex_variable() {
+	parser& parser::try_complex_variable(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find cvar at '" << source_.right_context(20) << "'\n";
 #endif
 		if(!failed_ && source_.has_next()) {
 			push();
 			size_t start = source_.index(), end = source_.index();
-			if(try_variable()) {
-				const std::string var = get(-1);
+			std::string var;
+			if(try_variable(var)) {
 				end = source_.index();
-				while(skipws(false).try_token("|").skipws(false).try_filter()) { 
+				std::string filter;
+				while(skipws(false).try_token("|").skipws(false).try_filter(filter)) { 
 					end = source_.index();
-					details_.emplace(detail_t { "complex_variable", get(-1) });
+					details_.emplace(detail_t { "complex_variable", filter });
 				}
 				
 				back(4);
 				pop();
 				
 				stack_.emplace_back(state_t {start, source_.slice(start, end) });				
+				out.put(source_.slice(start, end));
 				details_.emplace(detail_t { "complex_variable_name", var });
 #ifdef PARSER_DEBUG
 				std::cout << ">>> complex " << stack_.back().token << std::endl;
@@ -635,7 +667,7 @@ namespace cppcms { namespace templates {
 	}	
 
 	// IDENTIFIER is a sequence of NAME separated by the symbol ::. No blanks are allowed. For example: data::page
-	parser& parser::try_identifier() {
+	parser& parser::try_identifier(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find id at '" << source_.right_context(20) << "'\n";
 #endif
@@ -653,6 +685,7 @@ namespace cppcms { namespace templates {
 			std::swap(stack_, stack_copy);
 			if(source_.index() != start) {
 				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
+				out.put(source_.left_context_from(start));
 #ifdef PARSER_DEBUG
 				std::cout << ">>> id " << stack_.back().token << std::endl;
 #endif
@@ -665,18 +698,18 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::try_param_list() {
+	parser& parser::try_param_list(token_sink out) {
 		if(!failed_ && source_.has_next()) {
 			size_t start = source_.index();
 			auto stack_copy = stack_;
 			if(try_token("(")) {
 				while(!failed_) {
 					bool is_const = false, is_ref = false;
+					std::string name, type;
 					skipws(false);				
 					if(try_token(")")) {
 						break;
-					} else if(back(1).try_identifier_ws()) {
-						const std::string type = get(-2);
+					} else if(back(1).try_identifier_ws(type)) {
 						if(try_token("const")) {
 							is_const = true;
 							skipws(false);
@@ -689,9 +722,9 @@ namespace cppcms { namespace templates {
 						} else {
 							back(1);
 						}
-						if(try_name()) {
+
+						if(try_name(name)) {
 							// do not modify push_back order, or at least leave "param_end" first, as it is used as terminator
-							const std::string name = get(-1);
 							details_.push({ "param_end", "" });
 							details_.push({"is_ref", (is_ref ? "ref" : "") });
 							details_.push({"is_const", (is_const ? "const" : "") });
@@ -716,12 +749,13 @@ namespace cppcms { namespace templates {
 			
 			std::swap(stack_, stack_copy);
 			stack_.emplace_back(state_t { start, source_.left_context_from(start) });
+			out.put(source_.left_context_from(start));
 		} else {
 			failed_++;
 		}
 		return *this;
 	}
-	parser& parser::try_argument_list() {
+	parser& parser::try_argument_list(token_sink out) {
 		if(!failed_ && source_.has_next()) {			
 			size_t start = source_.index();
 			auto stack_copy = stack_;
@@ -730,13 +764,15 @@ namespace cppcms { namespace templates {
 					back(2);
 					bool closed = false;
 					while(!closed) {
+						std::string tmp;
+
 						skipws(false);
-						if(try_variable()) {
-							details_.emplace(detail_t { "argument_variable", get(-1) });
-						} else if(back(1).try_string()) {
-							details_.emplace(detail_t { "argument_string", get(-1) });
-						} else if(back(1).try_number()) {
-							details_.emplace(detail_t { "argument_number", get(-1) });
+						if(try_variable(tmp)) {
+							details_.emplace(detail_t { "argument_variable", tmp });
+						} else if(back(1).try_string(tmp)) {
+							details_.emplace(detail_t { "argument_string", tmp });
+						} else if(back(1).try_number(tmp)) {
+							details_.emplace(detail_t { "argument_number", tmp });
 						} else {
 							raise("expected ')', string, number or variable");
 						}
@@ -753,6 +789,7 @@ namespace cppcms { namespace templates {
 			}
 			std::swap(stack_, stack_copy);
 			stack_.emplace_back(state_t { start, source_.left_context_from(start) });
+			out.put(source_.left_context_from(start));
 		} else {
 			failed_++;
 		}
@@ -760,7 +797,7 @@ namespace cppcms { namespace templates {
 
 	}
 	// [ 'ext' ] NAME [ '(' ( VARIABLE | STRING | NUMBER ) [ ',' ( VARIABLE | STRING | NUMBER ) ] ... ]
-	parser& parser::try_filter() {
+	parser& parser::try_filter(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find filter at '" << source_.right_context(20) << "'\n";
 #endif
@@ -773,6 +810,7 @@ namespace cppcms { namespace templates {
 				try_argument_list();
 				stack_.pop_back();
 				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
+				out.put(source_.left_context_from(start));
 #ifdef PARSER_DEBUG
 				std::cout << ">>> filter " << stack_.back().token << std::endl;
 #endif
@@ -785,43 +823,44 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::try_name_ws() {
-		try_name();
+	parser& parser::try_name_ws(token_sink out) {
+		try_name(out);
 		skipws(true);
 		return *this;
 	}
 	
-	parser& parser::try_string_ws() {
-		try_string();
+	parser& parser::try_string_ws(token_sink out) {
+		try_string(out);
 		skipws(true);
 		return *this;
 	}
 	
-	parser& parser::try_number_ws() {
-		try_number();
+	parser& parser::try_number_ws(token_sink out) {
+		try_number(out);
 		skipws(true);
 		return *this;
 	}
 
-	parser& parser::try_variable_ws() {
-		try_variable();
+	parser& parser::try_variable_ws(token_sink out) {
+		try_variable(out);
 		skipws(true);
 		return *this;
 	}
 
-	parser& parser::try_identifier_ws() {
-		try_identifier();
+	parser& parser::try_identifier_ws(token_sink out) {
+		try_identifier(out);
 		skipws(true);
 		return *this;
 	}
 
-	parser& parser::skip_to(const std::string& token) {
+	parser& parser::skip_to(const std::string& token, token_sink out) {
 		if(!failed_ && source_.has_next()) {
 			size_t r = source_.find_on_right(token);
 			if(r == std::string::npos) {
 				failed_ +=2;
 			} else {
 				stack_.emplace_back(state_t { source_.index(), source_.right_context_to(r) } );
+				out.put(source_.right_context_to(r));
 				stack_.emplace_back(state_t { r, token });
 				source_.move_to(r + token.length());
 			}
@@ -884,9 +923,10 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::skip_to_end() {
+	parser& parser::skip_to_end(token_sink out) {
 		if(!failed_) {
 			stack_.emplace_back( state_t { source_.index(), source_.right_until_end() });
+			out.put(source_.right_until_end());
 			source_.move_to(source_.length());
 		} else {
 			failed_++;
@@ -894,7 +934,7 @@ namespace cppcms { namespace templates {
 		return *this;
 	}
 
-	parser& parser::try_parenthesis_expression() {
+	parser& parser::try_parenthesis_expression(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find parenthesis expression at '" << source_.right_context(20) << "'\n";
 #endif
@@ -929,6 +969,7 @@ namespace cppcms { namespace templates {
 			}
 			if(bracket_count == 0) {
 				stack_.emplace_back(state_t { start, source_.left_context_from(start) });
+				out.put(source_.left_context_from(start));
 			} else {
 				source_.move_to(start);
 				failed_++;
@@ -1041,15 +1082,16 @@ namespace cppcms { namespace templates {
 		try {
 			while(!p.finished() && !p.failed()) {
 				p.push();
-				if(p.reset().skip_to("<%")) { // [ <html><blah>..., <% ] = 2
+				std::string tmp;
+				if(p.reset().skip_to("<%", tmp)) { // [ <html><blah>..., <% ] = 2
 #ifdef PARSER_DEBUG
 					std::cout << ">>> main -> <%\n";
 #endif
-					size_t pos = p.get(-2).find("%>");
+					size_t pos = tmp.find("%>");
 					if(pos != std::string::npos) {
 						p.back(2).skip_to("%>").back(1).raise("unexpected %>");
 					}
-					add_html(p.get(-2));
+					add_html(tmp);
 
 					p.push();
 					if(p.try_token("=").skipws(false)) { // [ <html><blah>..., <%, =, \s*] = 3
@@ -1074,11 +1116,11 @@ namespace cppcms { namespace templates {
 					p.pop();
 				} else if(p.reset().skip_to("%>")) {
 					p.reset().raise("found unexpected %>");
-				} else if(p.reset().skip_to_end()) { // [ <blah><blah>EOF ]
+				} else if(p.reset().skip_to_end(tmp)) { // [ <blah><blah>EOF ]
 #ifdef PARSER_DEBUG
 					std::cout << ">>> main -> skip to end\n";
 #endif
-					add_html(p.get(-1));
+					add_html(tmp);
 				} else {
 					p.reset().raise("expected <%=, <% or EOF");
 				}
@@ -1107,8 +1149,10 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_flow_expression() {
 		p.push();
 		// ( 'if' | 'elif' ) [ 'not' ] [ 'empty' ] ( VARIABLE | 'rtl' )  
-		if(p.try_token_ws("if") || p.back(2).try_token_ws("elif")) {
-			const std::string verb = p.get(-2);
+		std::string tmp2;
+		if(p.try_one_of_tokens({"if", "elif"}, tmp2).skipws(true)) {
+			const std::string verb = tmp2;
+			std::string tmp;
 			expr::cpp cond;
 			expr::variable variable;
 			ast::if_t::type_t type = ast::if_t::type_t::if_regular;
@@ -1118,14 +1162,14 @@ namespace cppcms { namespace templates {
 			} else {
 				p.back(2);
 			}
-			if(p.try_token_ws("empty").try_variable_ws()) { // [ empty, \s+, VARIABLE, \s+ ]				
-				variable = expr::make_variable(p.get(-2));
+			if(p.try_token_ws("empty").try_variable_ws(tmp)) { // [ empty, \s+, VARIABLE, \s+ ]				
+				variable = expr::make_variable(tmp);
 				type = ast::if_t::type_t::if_empty;
-			} else if(p.back(4).try_variable_ws()) { // [ VAR, \s+ ]
-				variable = expr::make_variable(p.get(-2));
+			} else if(p.back(4).try_variable_ws(tmp)) { // [ VAR, \s+ ]
+				variable = expr::make_variable(tmp);
 				type = ast::if_t::type_t::if_regular;
-			} else if(p.back(2).try_token("(") && p.back(1).try_parenthesis_expression().skipws(false)) { // [ (, \s*, expr, \s* ]
-				const std::string parenthesed = p.get(-2);
+			} else if(p.back(2).try_token("(") && p.back(1).try_parenthesis_expression(tmp).skipws(false)) { // [ (, \s*, expr, \s* ]
+				const std::string parenthesed = tmp;
 				cond = expr::make_cpp(parenthesed.substr(1,parenthesed.length()-2));
 				type = ast::if_t::type_t::if_cpp;
 			} else {
@@ -1166,27 +1210,32 @@ namespace cppcms { namespace templates {
 			std::cout << "flow: else\n";
 #endif
 		// 'foreach' NAME ['as' IDENTIFIER ] [ 'rowid' IDENTIFIER [ 'from' NUMBER ] ] [ 'reverse' ] 'in' VARIABLE
-		} else if(p.reset().try_token_ws("foreach").try_name_ws()) {
-			const expr::name item_name = expr::make_name(p.get(-2));
+		} else if(p.reset().try_token_ws("foreach")) {
+			std::string tmp;
+			if(!p.try_name_ws(tmp)) {
+				p.raise("expected NAME");
+			}
+
+			const expr::name item_name = expr::make_name(tmp);
 			expr::identifier as;
 			expr::name rowid;
 			expr::variable variable;
 			bool reverse = false;
 			int from = 0;
 
-			if(p.try_token_ws("as").try_identifier_ws()) {
-				as = expr::make_identifier(p.get(-2));
+			if(p.try_token_ws("as").try_identifier_ws(tmp)) {
+				as = expr::make_identifier(tmp);
 			} else {
 				p.back(4);
 			}
-			if(p.try_token_ws("rowid").try_name_ws()) { // docs say IDENTIFIER, but local variable should be NAME
-				rowid = expr::make_name(p.get(-2));
+			if(p.try_token_ws("rowid").try_name_ws(tmp)) { // docs say IDENTIFIER, but local variable should be NAME
+				rowid = expr::make_name(tmp);
 			} else {
 				p.back(4);
 			}
 
-			if(p.try_token_ws("from").try_number_ws()) {
-				from = p.get<int>(-2);
+			if(p.try_token_ws("from").try_number_ws(tmp)) {
+				from = boost::lexical_cast<int>(tmp);
 			} else {
 				p.back(4);
 			}
@@ -1197,8 +1246,8 @@ namespace cppcms { namespace templates {
 				p.back(2);
 			}
 
-			if(p.try_token_ws("in").try_variable_ws().try_close_expression()) {
-				variable = expr::make_variable(p.get(-3));
+			if(p.try_token_ws("in").try_variable_ws(tmp).try_close_expression()) {
+				variable = expr::make_variable(tmp);
 			} else {
 				p.raise("expected in VARIABLE %>");
 			}
@@ -1229,9 +1278,7 @@ namespace cppcms { namespace templates {
 #endif
 		} else if(p.reset().try_token("end")) {
 			std::string what;
-			if(p.skipws(true).try_name()) {
-				what = p.get(-1);
-			} else {
+			if(!p.skipws(true).try_name(what)) {
 				p.back(2);
 			}
 			if(!p.try_close_expression()) {
@@ -1246,26 +1293,27 @@ namespace cppcms { namespace templates {
 
 		// 'cache' ( VARIABLE | STRING ) [ 'for' NUMBER ] ['on' 'miss' VARIABLE() ] [ 'no' 'triggers' ] [ 'no' 'recording' ]
 		} else if(p.reset().try_token_ws("cache")) {
+			std::string tmp;
 			expr::ptr name;
 			expr::variable miss;
 			int _for = -1;
 			bool no_triggers = false, no_recording = false;
-			if(p.try_variable_ws()) { 
-				name = expr::make_variable(p.get(-2));			
-			} else if(p.back(2).try_string_ws()) {
-				name = expr::make_string(p.get(-2));
+			if(p.try_variable_ws(tmp)) { 
+				name = expr::make_variable(tmp);			
+			} else if(p.back(2).try_string_ws(tmp)) {
+				name = expr::make_string(tmp);
 			} else {
 				p.raise("expected VARIABLE or STRING");
 			}
 
-			if(p.try_token_ws("for").try_number_ws()) {
-				_for = p.get<int>(-2);
+			if(p.try_token_ws("for").try_number_ws(tmp)) {
+				_for = boost::lexical_cast<int>(tmp);
 			} else {
 				p.back(4);
 			}
 
-			if(p.try_token_ws("on").try_token_ws("miss").try_variable_ws()) { // TODO: () is required at the end of expression, but try_variable already consumes it
-				miss = expr::make_variable(p.get(-2));
+			if(p.try_token_ws("on").try_token_ws("miss").try_variable_ws(tmp)) { // TODO: () is required at the end of expression, but try_variable already consumes it
+				miss = expr::make_variable(tmp);
 			} else {
 				p.back(6);
 			}
@@ -1291,11 +1339,12 @@ namespace cppcms { namespace templates {
 			std::cout << "flow: cache " << name << ", miss = " << miss << ", for " << _for << ", no_triggers = " << no_triggers << ", no_recording = " << no_recording << "\n";
 #endif
 		} else if(p.reset().try_token_ws("trigger")) {
+			std::string tmp;
 			expr::ptr name;
-			if(p.try_variable()) {
-				name = expr::make_variable(p.get(-1));
-			} else if(p.back(1).try_string()) {
-				name = expr::make_string(p.get(-1));
+			if(p.try_variable(tmp)) {
+				name = expr::make_variable(tmp);
+			} else if(p.back(1).try_string(tmp)) {
+				name = expr::make_string(tmp);
 			} else  {
 				p.raise("expected STRING or VARIABLE");
 			}
@@ -1317,15 +1366,13 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_global_expression() {
 		p.push();
-
+		std::string tmp2;
 		if(p.try_token_ws("skin")) { //  [ skin, \s+ ] 
 			std::string skin_name;
 			p.push();
 			if(p.try_close_expression()) { // [ skin, \s+, %> ]
 				skin_name = "__default__";
-			} else if(p.reset().try_name_ws().try_close_expression()) { // [ skin, \s+, skinname, \s+, %> ]
-				skin_name = p.get(-3);
-			} else {
+			} else if(!p.reset().try_name_ws(skin_name).try_close_expression()) { // [ skin, \s+, skinname, \s+, %> ]
 				p.reset().raise("expected %> or skin name");
 			}
 			p.pop();
@@ -1338,13 +1385,9 @@ namespace cppcms { namespace templates {
 		} else if(p.reset().try_token_ws("view")) { // [ view ]
 			p.push();
 			std::string view_name, data_name, parent_name;
-			if(p.try_name_ws().try_token_ws("uses").try_identifier_ws()) { // [ view, NAME, \s+ , uses, \s+, IDENTIFIER, \s+]
-				view_name = p.get(-6);
-				data_name = p.get(-2);
+			if(p.try_name_ws(view_name).try_token_ws("uses").try_identifier_ws(data_name)) { // [ view, NAME, \s+ , uses, \s+, IDENTIFIER, \s+]
 				p.push();
-				if(p.try_token_ws("extends").try_name()) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
-					parent_name = p.get(-1);
-				} else {
+				if(!p.try_token_ws("extends").try_name(parent_name)) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
 					p.reset();
 				}
 				p.pop();
@@ -1365,8 +1408,12 @@ namespace cppcms { namespace templates {
 				p.reset().raise("expected %> after view definition");
 			}
 			p.pop();
-		} else if(p.reset().try_token_ws("template").try_name().try_param_list().try_close_expression()) { // [ template, \s+, name, arguments, %> ]
-			const std::string function_name = p.get(-3), arguments = p.get(-2);
+		} else if(p.reset().try_token_ws("template")) { // [ template, \s+, name, arguments, %> ]
+			std::string function_name, arguments;
+			if(!p.try_name(function_name).try_param_list(arguments).try_close_expression()) {
+				p.raise("expected NAME(params...) %>");
+			}
+
 			expr::param_list_t::params_t params;
 			std::string name, type, is_const, is_ref;
 			while(!p.details().empty()) {
@@ -1400,10 +1447,14 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "global: template " << function_name << "\n";
 #endif
-		} else if(p.reset().try_token_ws("c++").skip_to("%>")) { // [ c++, \s+, cppcode, %> ] = 4
-			add_cpp(expr::make_cpp(p.get(-2)));
-		} else if(p.reset().try_token_ws("html").try_close_expression() || p.back(3).try_token_ws("xhtml").try_close_expression()) { // [ html|xhtml, \s+, %> ]
-			const std::string mode = p.get(-3);
+		} else if(p.reset().try_token_ws("c++")) { // [ c++, \s+, cppcode, %> ] = 4
+			std::string tmp;
+			if(!p.skip_to("%>", tmp)) {
+				p.raise("expected cppcode %>");
+			}
+			add_cpp(expr::make_cpp(tmp));
+		} else if(p.reset().try_one_of_tokens({"html", "xhtml", "text"}, tmp2).skipws(false).try_close_expression()) {
+			const std::string mode = tmp2;
 
 			current_ = current_->as<ast::root_t>().set_mode(mode, p.line());
 #ifdef PARSER_TRACE
@@ -1421,10 +1472,11 @@ namespace cppcms { namespace templates {
 		// variables is array of 'raw', 'unprocesses' strings after 'using'
 		// and result options are processed 
 		if(p.try_token_ws("using")) {
-			while(p.skipws(false).try_complex_variable()) { // [ \s*, variable ]					
-				variables.emplace_back(p.get(-1));
+			std::string tmp;
+			while(p.skipws(false).try_complex_variable(tmp)) { // [ \s*, variable ]					
+				variables.emplace_back(tmp);
 #ifdef PARSER_TRACE
-				std::cout << "\tvariable " << p.get(-1) << std::endl;
+				std::cout << "\tvariable " << tmp << std::endl;
 #endif
 				if(!p.skipws(false).try_token(",")) {
 					p.back(2);
@@ -1467,9 +1519,14 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_render_expression() {
 		p.push();
-		if(p.try_token("gt").skipws(false).try_string() || p.back(4).try_token_ws("pgt").try_string()) { // [ gt|pgt, \s+, string, \s+ ]
-			const std::string verb = p.get(-3);
-			const expr::string fmt = expr::make_string(p.get(-1));
+		std::string tmp2;
+		if(p.try_one_of_tokens({"gt", "pgt"}, tmp2)) {
+			std::string tmp;
+			if(!p.skipws(false).try_string(tmp)) {
+				p.raise("expected STRING");
+			}
+			const std::string verb = tmp2;
+			const expr::string fmt = expr::make_string(tmp);
 			std::vector<std::string> variables;
 			p.skipws(false);
 			auto options = parse_using_options(variables);
@@ -1481,10 +1538,14 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "render: gt " << fmt << "\n";
 #endif
-		} else if(p.reset().try_token_ws("ngt").try_string().try_comma().try_string().try_comma().try_variable_ws()) { // [ ngt, \s+, STRING, ',', STRING, ',', VARIABLE, \s+ ]
-			const expr::string singular = expr::make_string(p.get(-6));
-			const expr::string plural = expr::make_string(p.get(-4));
-			const expr::variable variable = expr::make_variable(p.get(-2));
+		} else if(p.reset().try_token_ws("ngt")) { // [ ngt, \s+, STRING, ',', STRING, ',', VARIABLE, \s+ ]
+			std::string tmp1, tmp2, tmp3;
+			if(!p.try_string(tmp1).try_comma().try_string(tmp2).try_comma().try_variable_ws(tmp3)) {
+				p.raise("expected STRING, STRING, VARIABLE");
+			}
+			const expr::string singular = expr::make_string(tmp1);
+			const expr::string plural = expr::make_string(tmp2);
+			const expr::variable variable = expr::make_variable(tmp3);
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_close_expression()) {
@@ -1495,8 +1556,12 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "render: ngt " << singular << "/" << plural << "/" << variable << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("url").try_string_ws()) { // [ url, \s+, STRING, \s+ ]
-			const expr::string url = expr::make_string(p.get(-2));
+		} else if(p.reset().try_token_ws("url")) { // [ url, \s+, STRING, \s+ ]
+			std::string tmp;
+			if(!p.try_string_ws(tmp)) {
+				p.raise("expected STRING");
+			}
+			const expr::string url = expr::make_string(tmp);
 			std::vector<std::string> variables;
 			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_close_expression()) {
@@ -1507,23 +1572,28 @@ namespace cppcms { namespace templates {
 #ifdef PARSER_TRACE
 			std::cout << "render: url " << url << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("include").try_identifier()) { // [ include, \s+, identifier ]
-			std::string expr = p.get(-1);
+		} else if(p.reset().try_token_ws("include")) { // [ include, \s+, identifier ]
+			std::string tmp;
+			std::string expr;
 			expr::call_list id;
 			expr::identifier from, _using;
 			expr::variable with;
+			if(!p.try_identifier(expr)) {
+				p.raise("expected IDENTIFIER");
+			}
+
 			p.skipws(false);
-			p.try_argument_list(); // [ argument_list ], cant fail
+			std::string alist;
+			p.try_argument_list(alist); // [ argument_list ], cant fail
 			while(!p.details().empty()) 
 				p.details().pop(); // aka p.details().clear();
 
-			const std::string alist = p.get(-1);
-			if(p.skipws(true).try_token_ws("from").try_identifier_ws()) { // [ \s+, from, \s+, ID, \s+ ]
-				from = expr::make_identifier(p.get(-2));
-			} else if(p.back(4).try_token_ws("using").try_identifier_ws()) { // [ \s+, using, \s+, ID, \s+ ]
-				_using = expr::make_identifier(p.get(-2));
-				if(p.try_token_ws("with").try_variable_ws()) { // [ with, \s+, VAR, \s+ ]
-					with = expr::make_variable(p.get(-2));
+			if(p.skipws(true).try_token_ws("from").try_identifier_ws(tmp)) { // [ \s+, from, \s+, ID, \s+ ]
+				from = expr::make_identifier(tmp);
+			} else if(p.back(4).try_token_ws("using").try_identifier_ws(tmp)) { // [ \s+, using, \s+, ID, \s+ ]
+				_using = expr::make_identifier(tmp);
+				if(p.try_token_ws("with").try_variable_ws(tmp)) { // [ with, \s+, VAR, \s+ ]
+					with = expr::make_variable(tmp);
 				} else {
 					p.back(4);
 				} 
@@ -1555,17 +1625,21 @@ namespace cppcms { namespace templates {
 			std::cout << std::endl;
 			std::cout << "\tparameters " << alist << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("using").try_identifier_ws()) { // 'using' IDENTIFIER  [ 'with' VARIABLE ] as IDENTIFIER  
+		} else if(p.reset().try_token_ws("using")) { // 'using' IDENTIFIER  [ 'with' VARIABLE ] as IDENTIFIER  
+			std::string tmp;
 			expr::identifier id, as;
 			expr::variable with;
-			id = expr::make_identifier(p.get(-2));
-			if(p.try_token_ws("with").try_variable_ws()) {
-				with = expr::make_variable(p.get(-2));
+			if(!p.try_identifier_ws(tmp)) {
+				p.raise("expected IDENTIFIER");
+			}
+			id = expr::make_identifier(tmp);
+			if(p.try_token_ws("with").try_variable_ws(tmp)) {
+				with = expr::make_variable(tmp);
 			} else {
 				p.back(4);
 			}
-			if(p.try_token_ws("as").try_identifier_ws()) {
-				as = expr::make_identifier(p.get(-2));
+			if(p.try_token_ws("as").try_identifier_ws(tmp)) {
+				as = expr::make_identifier(tmp);
 			} else {
 				p.back(4).raise("expected 'as' IDENTIFIER");
 			}
@@ -1580,9 +1654,14 @@ namespace cppcms { namespace templates {
 			std::cout << "\twith " << (with.empty() ? "(current)" : with) << std::endl;
 			std::cout << "\tas " << as << std::endl;
 #endif
-		} else if(p.reset().try_token_ws("form").try_name_ws().try_variable_ws().try_close_expression()) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]			
-			const expr::name name = expr::make_name(p.get(-5));
-			const expr::variable var = expr::make_variable(p.get(-3));
+		} else if(p.reset().try_token_ws("form")) { // [ form, \s+, NAME, \s+, VAR, \s+, %> ]			
+			std::string tmp1, tmp2;
+			if(!p.try_name_ws(tmp1).try_variable_ws(tmp2).try_close_expression()) {
+				p.raise("expected form STYLE VARIABLE %>");
+			} 
+
+			const expr::name name = expr::make_name(tmp1);
+			const expr::variable var = expr::make_variable(tmp2);
 			if(name->repr() == "end")
 				current_ = current_->end("form", p.line());
 			else
@@ -1591,9 +1670,10 @@ namespace cppcms { namespace templates {
 			std::cout << "render: form, name = " << name << ", var = " << var << "\n";
 #endif
 		} else if(p.reset().try_token_ws("csrf")) {
+			std::string tmp;
 			expr::name type;
-			if(p.try_name_ws().try_close_expression()) { // [ csrf, \s+, NAME, \s+, %> ]
-				type = expr::make_name(p.get(-3));
+			if(p.try_name_ws(tmp).try_close_expression()) { // [ csrf, \s+, NAME, \s+, %> ]
+				type = expr::make_name(tmp);
 			} else if(!p.back(3).try_close_expression()) {
 				p.raise("expected csrf style(type) or %>");
 			}
@@ -1604,28 +1684,29 @@ namespace cppcms { namespace templates {
 #endif
 		// 'render' [ ( VARIABLE | STRING ) , ] ( VARIABLE | STRING ) [ 'with' VARIABLE ] 
 		} else if(p.reset().try_token_ws("render")) {
+			std::string tmp;
 			expr::ptr skin, view;
 			expr::variable with;
-			if(p.try_variable()) {
-				view = expr::make_variable(p.get(-1));
-			} else if(p.back(1).try_string()) {
-				view = expr::make_string(p.get(-1));
+			if(p.try_variable(tmp)) {
+				view = expr::make_variable(tmp);
+			} else if(p.back(1).try_string(tmp)) {
+				view = expr::make_string(tmp);
 			} else {
 				p.raise("expected STRING or VARIABLE");
 			}
 				
-			if(p.try_comma().try_variable_ws()) {
+			if(p.try_comma().try_variable_ws(tmp)) {
 				skin = view;
-				view = expr::make_variable(p.get(-2));
-			} else if(p.back(2).try_string_ws()) {
+				view = expr::make_variable(tmp);
+			} else if(p.back(2).try_string_ws(tmp)) {
 				skin = view;
-				view = expr::make_string(p.get(-2));
+				view = expr::make_string(tmp);
 			} else {
 				p.back(3).skipws(false);
 			}
 			
-			if(p.try_token_ws("with").try_variable_ws()) {
-				with = expr::make_variable(p.get(-2));
+			if(p.try_token_ws("with").try_variable_ws(tmp)) {
+				with = expr::make_variable(tmp);
 			} else {
 				p.back(4);
 			}
