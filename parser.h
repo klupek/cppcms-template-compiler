@@ -589,6 +589,7 @@ namespace cppcms { namespace templates {
 		const std::string input_;
 		size_t index_, line_;
 		std::vector<file_index_t> file_indexes_;
+		std::stack< size_t > marks_;
 	public:
 		parser_source(const std::vector<std::string>& files);
 		void reset(size_t index, file_position_t line);
@@ -624,6 +625,11 @@ namespace cppcms { namespace templates {
 
 		// get up to n chars left from current, without current
 		std::string left_context_from(size_t beg) const;
+
+		void mark();
+		void unmark();
+		size_t get_mark() const;
+		std::string right_from_mark();
 	};
 
 	class token_sink {		
@@ -639,7 +645,9 @@ namespace cppcms { namespace templates {
 		bool has_details() const;
 		detail_t get_detail();
 		const detail_t& top_detail() const;
+		const std::string& value() const;
 	private:
+		std::string tmp_;
 		std::string* target_;
 		std::shared_ptr<std::stack<detail_t>> details_;
 	};

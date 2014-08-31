@@ -415,6 +415,33 @@ namespace cppcms { namespace templates {
 		return index_; 
 	}
 
+	void parser_source::mark() {
+		marks_.push(index_);
+#ifdef PARSER_DEBUG
+		std::cerr << "mark " << marks_.size() << " at " << right_context(20) << std::endl;
+#endif
+	}
+	
+	void parser_source::unmark() {
+#ifdef PARSER_DEBUG
+		std::cerr << "unmark " << marks_.size() << " at " << slice(marks_.top(), marks_.top()+20) << std::endl;
+#endif
+		marks_.pop();
+	}
+
+	size_t parser_source::get_mark() const {
+		return marks_.top();
+	}
+
+	std::string parser_source::right_from_mark() {
+		auto result = left_context_from(marks_.top());
+#ifdef PARSER_DEBUG
+		std::cerr << "mark2text " << marks_.size() << " at " << slice(marks_.top(), marks_.top()+20) << std::endl;
+#endif
+		marks_.pop();
+		return result;
+	}
+
 	file_position_t parser_source::line() const {
 		for(const file_index_t& fi : file_indexes_) {
 			if(index_ >= fi.beg && index_ < fi.end) {
@@ -434,12 +461,11 @@ namespace cppcms { namespace templates {
 		, details_(new std::stack<detail_t>()) {}
 
 	token_sink::token_sink() 
-		: target_(nullptr) 
+		: target_(&tmp_) 
 		, details_(new std::stack<detail_t>()) {}
 
 	void token_sink::put(const std::string& what) {
-		if(target_ != nullptr)
-			*target_ = what;
+		*target_ = what;
 	}
 
 	bool token_sink::has_details() const {
@@ -448,6 +474,10 @@ namespace cppcms { namespace templates {
 
 	void token_sink::add_detail(const std::string& what, const std::string& item) {
 		details_->push({what, item});
+	}
+		
+	const std::string& token_sink::value() const {
+		return *target_;
 	}
 
 	token_sink::detail_t token_sink::get_detail() {
@@ -509,9 +539,7 @@ namespace cppcms { namespace templates {
 			if(!try_token("%>")) {
 				back(1).try_token("% >");
 			}
-			if(!failed_) {
-				compress();
-			}
+			compress();
 			pop();
 		} else {
 			failed_++;
@@ -526,16 +554,17 @@ namespace cppcms { namespace templates {
 		std::cout << ">>>(" << failed_ << ") find name at '" << source_.right_context(20) << "'\n";
 #endif
 		if(!failed_ && source_.has_next()) {
-			size_t start = source_.index();
+			source_.mark();
 			char c = source_.current();
 			if(is_latin_letter(c) || c == '_') {
 				for(;source_.has_next() && ( is_latin_letter(c) || is_digit(c) || c == '_'); c = source_.next());
-				out.put(source_.left_context_from(start));
-				stack_.emplace_back(state_t { start });
+				stack_.emplace_back(state_t { source_.get_mark() });
+				out.put(source_.right_from_mark());
 #ifdef PARSER_DEBUG
-				std::cout << ">>> name " << source_.left_context_from(start) << std::endl;
+				std::cout << ">>> name " << out.value() << std::endl;
 #endif
 			} else {
+				source_.unmark();
 				failed_ ++;
 			}
 		} else {
@@ -549,7 +578,7 @@ namespace cppcms { namespace templates {
 		std::cout << ">>>(" << failed_ << ") find string at '" << source_.right_context(20) << "'\n";
 #endif
 		if(!failed_ && source_.has_next()) {
-			size_t start = source_.index();
+			source_.mark();
 			char c = source_.current();
 			if(c == '"') {
 				bool escaped = false;
@@ -561,20 +590,21 @@ namespace cppcms { namespace templates {
 						escaped = true;
 				}
 				if(!source_.has_next()) { // '"' was not found
-					source_.move_to(start);
+					source_.move_to(source_.get_mark());
 					raise("expected \", found EOF instead");
 				} else {
 					source_.next();
-					stack_.emplace_back(state_t { start }); 
-					out.put(source_.left_context_from(start));
+					stack_.emplace_back(state_t { source_.get_mark() }); 
+					out.put(source_.right_from_mark());
 #ifdef PARSER_DEBUG
-					std::cout << ">>> string " << source_.left_context_from(start) << std::endl;
+					std::cout << ">>> string " << out.value() << std::endl;
 #endif
 				}
 			} else {
 #ifdef PARSER_DEBUG
 				std::cout << ">>> string failed at " << source_.index() << std::endl;
 #endif
+				source_.unmark();
 				failed_++;
 			}
 		} else {
@@ -589,7 +619,7 @@ namespace cppcms { namespace templates {
 		std::cout << ">>>(" << failed_ << ") find number at '" << source_.right_context(20) << "'\n";
 #endif
 		if(!failed_ && source_.has_next()) {
-			size_t start = source_.index();
+			source_.mark();
 			char c = source_.current();
 
 			if(c == '-' || c == '+')
@@ -600,12 +630,13 @@ namespace cppcms { namespace templates {
 					if(c == '.')
 						dot = true;
 				}
-				stack_.emplace_back(state_t{ start });				
-				out.put(source_.left_context_from(start));
+				stack_.emplace_back(state_t{ source_.get_mark() });				
+				out.put(source_.right_from_mark());
 #ifdef PARSER_DEBUG
-				std::cout << ">>> number " << source_.left_context_from(start) << std::endl;
+				std::cout << ">>> number " << out.value() << std::endl;
 #endif
 			} else {
+				source_.unmark();
 				failed_++;
 			}
 		} else { 
@@ -622,38 +653,32 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = source_.index(), end = source_.index();
+			source_.mark();
+
 			char c = source_.current();
 			// parse *name((\.|->)name)
 			if(c == '*')
 				c = source_.next();
-			while(try_name()) {
-				end = source_.index();
-				if(!try_token("()")) 
+			if(try_name().try_token("()") || back(1)) {
+				// scan for ([.]|->)(NAME) blocks 
+				while(skipws(false).try_one_of_tokens({".","->"}).skipws(false).try_name().try_token("()") || back(1));
+
+				// back from 4 failed attempts(ws, token, ws, name)
+				back(4);
+
+				// add optional "()" token
+				if(!try_token("()"))
 					back(1);
 
-				if(try_token(".")) {
-					end = source_.index();
-				} else if(back(1).try_token("->")) {
-					end = source_.index();
-				} else {
-					break;
-				}
-			}
-			back(1); // remove either last failed try_name() or last failed try_token("->")
-			
-			if(end != start) {
-				if(!try_token("()")) {
-					back(1);
-				}
-				compress();
-				out.put(source_.left_context_from(start));
+				// return result
+				out.put(source_.right_from_mark());
 #ifdef PARSER_DEBUG
-				std::cout << ">>> var " << source_.left_context_from(start) << std::endl;
+				std::cout << ">>> var " << out.value() << std::endl;
 #endif
 			} else {
-				failed_ ++;
+				source_.unmark();
 			}
+			compress();
 			pop();
 
 		} else {
@@ -668,7 +693,7 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = source_.index();
+			source_.mark();
 			std::string var;
 			if(try_variable(var)) {
 				std::string filter;
@@ -677,18 +702,17 @@ namespace cppcms { namespace templates {
 				}
 				
 				back(4);
-				
-				compress();
-				pop();
-
-				out.put(source_.left_context_from(start));
+								
+				out.put(source_.right_from_mark());
 				out.add_detail("complex_variable_name", var);
 #ifdef PARSER_DEBUG
-				std::cout << ">>> cvar " << source_.left_context_from(start) << std::endl;
+				std::cout << ">>> cvar " << out.value() << std::endl;
 #endif
 			} else {
-				pop();
+				source_.unmark();
 			}
+			compress();
+			pop();
 		} else {
 			failed_++;
 		}
@@ -702,26 +726,21 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = source_.index();
+			source_.mark();
 
-			while(try_name()) {
-				if(!try_token("::")) {
-					break;
-				}
-			}
-			back(1); // failed try_name() OR failed token
-
-			if(source_.index() != start) {
-				compress();
-				pop();
-				out.put(source_.left_context_from(start));
+			if(try_name()) {
+				while(try_token("::").try_name());
+				back(2);
+			
+				out.put(source_.right_from_mark());
 #ifdef PARSER_DEBUG
-				std::cout << ">>> id " << source_.left_context_from(start) << std::endl;
+				std::cout << ">>> id " << out.value() << std::endl;
 #endif
 			} else {
-				pop();
-				failed_++;
+				source_.unmark();
 			}
+			compress();
+			pop();
 		} else {
 			failed_++;
 		}
@@ -731,7 +750,7 @@ namespace cppcms { namespace templates {
 	parser& parser::try_param_list(token_sink out) {
 		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = source_.index();
+			source_.mark();
 			if(try_token("(")) {
 				while(!failed_) {
 					bool is_const = false, is_ref = false;
@@ -779,7 +798,7 @@ namespace cppcms { namespace templates {
 			
 			compress();
 			pop();
-			out.put(source_.left_context_from(start));
+			out.put(source_.right_from_mark());
 		} else {
 			failed_++;
 		}
@@ -787,8 +806,9 @@ namespace cppcms { namespace templates {
 	}
 	parser& parser::try_argument_list(token_sink out) {
 		if(!failed_ && source_.has_next()) {		
-			size_t start = source_.index();
 			push();
+			source_.mark();
+
 			if(try_token("(")) {
 				if(!skipws(false).try_token(")")) {
 					back(2);
@@ -820,7 +840,7 @@ namespace cppcms { namespace templates {
 			
 			compress();
 			pop();
-			out.put(source_.left_context_from(start));
+			out.put(source_.right_from_mark());
 		} else {
 			failed_++;
 		}
@@ -834,21 +854,22 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = source_.index();
+			source_.mark();
 			if(!try_token_ws("ext")) {
 				back(1);
 			}
 			if(try_name()) {
 				try_argument_list();
-				compress();
-				out.put(source_.left_context_from(start));
+				out.put(source_.right_from_mark());
 #ifdef PARSER_DEBUG
-				std::cout << ">>> filter " << source_.left_context_from(start) << std::endl;
+				std::cout << ">>> filter " << out.value() << std::endl;
 #endif
 			} else {
-				pop();
+				source_.unmark();
 				failed_++;
 			}
+			pop();
+			compress();
 		} else {
 			failed_ ++;
 		}
@@ -918,13 +939,14 @@ namespace cppcms { namespace templates {
 
 	parser& parser::skipws(bool require) {
 		if(!failed_ && source_.has_next()) {
-			const size_t start = source_.index();
+			source_.mark();
 			for(;source_.has_next() && std::isspace(source_.current()); source_.move(1));
-			stack_.emplace_back( state_t { start });
+			stack_.emplace_back( state_t { source_.get_mark() });
 #ifdef PARSER_DEBUG
 			std::cout << ">>> skipws from " << start << " to " << source_.index() << std::endl;
 #endif
-			if(require && source_.index() == start)
+			const std::string result = source_.right_from_mark();
+			if(require && result.empty())
 				failed_++;
 		} else {
 			failed_ ++;
@@ -935,16 +957,14 @@ namespace cppcms { namespace templates {
 	parser& parser::try_comma() {
 		if(!failed_ && source_.has_next()) {
 			push();
-			size_t start = source_.index();
 			skipws(false);
 			try_token(",");
 			skipws(false);
 			if(failed_) {
 				back(3);
 				failed_++;
-			} else {
-				compress();
 			}
+			compress();
 			pop();
 		} else {
 			failed_++;
@@ -978,7 +998,7 @@ namespace cppcms { namespace templates {
 #endif
 		if(!failed_ && source_.has_next() && source_.current() == '(') {
 			push();
-			size_t start = source_.index();
+			source_.mark();
 			int bracket_count = 1;
 			bool escaped = false, string = false, string2 = false;
 			source_.next();
@@ -1007,12 +1027,13 @@ namespace cppcms { namespace templates {
 
 			}
 			if(bracket_count == 0) {
-				compress();
-				out.put(source_.left_context_from(start));
+				out.put(source_.right_from_mark());
 			} else {
-				source_.move_to(start);
+				source_.move_to(source_.get_mark());
+				source_.unmark();
 				failed_++;
 			}
+			compress();
 			pop();
 		} else {
 			failed_ ++;
