@@ -8,8 +8,11 @@
 #include <memory>
 #include <map>
 #include <set>
+#include <list>
 #include <boost/lexical_cast.hpp>
 
+// for demangle only
+#include <cxxabi.h>
 namespace cppcms { namespace templates {
 	struct file_position_t {
 		std::string filename;
@@ -21,6 +24,21 @@ namespace cppcms { namespace templates {
 	public:
 		error_at_line(const std::string& msg, const file_position_t& line);
 		const file_position_t& line() const;
+	};
+
+	// FIXME: make better (aka: copy of boost demangle) wrapper, or use newer (1.56) boost
+	inline std::string demangle(const char* name) {
+		std::size_t size = 0;
+		int status = 0;
+		char *demangled = abi::__cxa_demangle( name, NULL, &size, &status );
+		return demangled ? std::string(demangled) : ( std::string("[demangle failed:") + name + "]");
+	}
+
+	std::string translate_ast_object_name(const std::string& name); 
+
+	class bad_cast : public std::runtime_error {
+	public:
+		using std::runtime_error::runtime_error;
 	};
 	
 	namespace generator {
@@ -38,10 +56,22 @@ namespace cppcms { namespace templates {
 			// runtime state (with loadable defaults)
 			std::string variable_prefix;
 			std::string output_mode;
-			std::set<std::string> scope_variables;
+			void add_scope_variable(const std::string& name);
+			void remove_scope_variable(const std::string& name);
+			bool check_scope_variable(const std::string& name);
 
 			// configurables
 			std::string skin;
+			enum {
+				// levels
+				compat 				= 0x0,
+				magic1				= compat
+			};
+			int level;
+
+		private:
+			std::set<std::string> scope_variables;
+
 		};
 	}
 
@@ -75,19 +105,6 @@ namespace cppcms { namespace templates {
 		typedef std::shared_ptr<html_t> html;
 		typedef std::shared_ptr<xhtml_t> xhtml;
 
-		number make_number(const std::string& repr);
-		variable make_variable(const std::string& repr);
-		filter make_filter(const std::string& repr);
-		string make_string(const std::string& repr);
-		name make_name(const std::string& repr);
-		identifier make_identifier(const std::string& repr);
-		call_list make_call_list(const std::string& repr, const std::string& prefix);
-		param_list make_param_list(const std::string& repr);
-		cpp make_cpp(const std::string& repr);
-		text make_text(const std::string& repr);
-		html make_html(const std::string& repr);
-		xhtml make_xhtml(const std::string& repr);
-		
 		class base_t {
 		protected:
 			const std::string value_;
@@ -170,10 +187,21 @@ namespace cppcms { namespace templates {
 		
 		class param_list_t : public base_t {
 		public:
-			param_list_t(const std::string&);
+			struct param_t {
+				expr::identifier type;
+				bool is_const, is_ref;
+				expr::name name;
+			};
+			typedef std::vector<param_t> params_t;
+
+			param_list_t(const std::string&, const params_t&);
 			using base_t::base_t;
 			std::string repr() const;
+			const params_t& params() const;
+						
 			virtual std::string code(generator::context& context) const;
+		private:
+			const params_t params_;
 		};
 		
 		class filter_t : public call_list_t {
@@ -192,6 +220,20 @@ namespace cppcms { namespace templates {
 			std::string repr() const;
 			virtual std::string code(generator::context& context) const;
 		};
+		
+		number make_number(const std::string& repr);
+		variable make_variable(const std::string& repr);
+		filter make_filter(const std::string& repr);
+		string make_string(const std::string& repr);
+		name make_name(const std::string& repr);
+		identifier make_identifier(const std::string& repr);
+		call_list make_call_list(const std::string& repr, const std::string& prefix);
+		param_list make_param_list(const std::string& repr, const param_list_t::params_t&);
+		cpp make_cpp(const std::string& repr);
+		text make_text(const std::string& repr);
+		html make_html(const std::string& repr);
+		xhtml make_xhtml(const std::string& repr);
+		
 
 
 		std::ostream& operator<<(std::ostream& o, const name_t& obj);
@@ -247,8 +289,14 @@ namespace cppcms { namespace templates {
 				try {
 					return dynamic_cast<T&>(*this); 
 				} catch(const std::bad_cast&) {
-					std::cerr << "bad dynamic cast from " << typeid(*this).name() << " to " << typeid(T()).name() << std::endl;
-					throw;
+					std::string tgt = demangle(typeid(T).name());
+					std::string src = demangle(typeid(*this).name());
+					// make some translations
+					const std::string msg = std::string("could not insert child node: parent node is ") 
+						+ translate_ast_object_name(src)
+					        + ", but it should be "
+						+ translate_ast_object_name(tgt);
+					throw bad_cast(msg);
 				}
 			}
 
@@ -275,14 +323,14 @@ namespace cppcms { namespace templates {
 				file_position_t line;
 				expr::cpp code;
 			};
-			std::vector<code_t> codes;
-			typedef std::map< expr::name_t, view_ptr > view_set_t;
+			std::vector<code_t> codes;			
+			typedef std::list< std::pair< expr::name_t, view_ptr> > view_set_t;
 			struct skin_t {
 				file_position_t line, endline;
 				view_set_t views;
 			};
 
-			typedef std::map< expr::name_t, skin_t > skins_t;
+			typedef std::list< std::pair<expr::name_t, skin_t> > skins_t;
 			skins_t skins;
 			skins_t::iterator current_skin;
 			std::string mode_;
@@ -530,13 +578,20 @@ namespace cppcms { namespace templates {
 		};
 	}
 
+	struct file_index_t {
+		const std::string filename;
+		const size_t beg, end;
+		const size_t line_beg, line_end;
+	};
 
 	class parser_source {
+		const std::pair<std::string, std::vector<file_index_t>> input_pair_;
 		const std::string input_;
 		size_t index_, line_;
-		const std::string filename_;
+		std::vector<file_index_t> file_indexes_;
+		std::stack< size_t > marks_;
 	public:
-		parser_source(const std::string& filename);
+		parser_source(const std::vector<std::string>& files);
 		void reset(size_t index, file_position_t line);
 
 		void move(int offset); // index_ += index_offset
@@ -570,62 +625,79 @@ namespace cppcms { namespace templates {
 
 		// get up to n chars left from current, without current
 		std::string left_context_from(size_t beg) const;
+
+		void mark();
+		void unmark();
+		size_t get_mark() const;
+		std::string right_from_mark();
 	};
 
-	class parser {
-		parser_source source_;
-		struct state_t {
-			size_t index;
-			std::string token;
-		};
-
-		std::vector<state_t> stack_;
-		std::stack<std::pair<size_t,size_t>> state_stack_;
-		// details stack looks like stack or state_stack_, but refactoring it currently would break too many things
+	class token_sink {		
 	public:
 		struct detail_t {
 			const std::string what, item;
 		};
-	private:	
-		typedef std::stack<detail_t> details_t;
-		details_t details_;
 
+		token_sink(std::string&);
+		token_sink();
+		void put(const std::string&);
+		void add_detail(const std::string& what, const std::string& item);
+		bool has_details() const;
+		detail_t get_detail();
+		const detail_t& top_detail() const;
+		const std::string& value() const;
+	private:
+		std::string tmp_;
+		std::string* target_;
+		std::shared_ptr<std::stack<detail_t>> details_;
+	};
+
+	class parser {
+		parser_source source_;
+
+		// index stack, used (only) for back(n), going n tokens up
+		struct state_t {
+			size_t index;
+		};
+
+		std::vector<state_t> stack_;
+		std::stack<std::pair<size_t,size_t>> state_stack_;
+	public:
 		size_t failed_;
 	public:
 		file_position_t line() const;
-		explicit parser(const std::string& input);
+		explicit parser(const std::vector<std::string>& files);
 
 		parser& try_token(const std::string& token);
 		parser& try_token_ws(const std::string& token);
-		parser& try_token_nl(const std::string& token);
+		parser& try_one_of_tokens(const std::vector<std::string>& tokens, token_sink out = token_sink());
 
 
-		parser& try_name(); // -> [ NAME ]
-		parser& try_name_ws(); // -> [ NAME, \s+ ]
-		parser& try_string(); // -> [ STRING, ]
-		parser& try_string_ws(); // -> [ STRING, \s+ ]
-		parser& try_number(); // -> [ NUMBER ]
-		parser& try_number_ws(); // -> [ NUMBER, \s+ ]
-		parser& try_variable(); // -> [ VAR ]
-		parser& try_variable_ws(); // -> [ VAR, \s+ ]
-		parser& try_complex_variable(); // -> [ CVAR ]
-		parser& try_complex_variable_ws(); // -> [ CVAR, \s+ ]
-		parser& try_filter(); // -> [ FILTER ]
+		parser& try_name(token_sink out = token_sink()); // -> [ NAME ]
+		parser& try_name_ws(token_sink out = token_sink()); // -> [ NAME, \s+ ]
+		parser& try_string(token_sink out = token_sink()); // -> [ STRING, ]
+		parser& try_string_ws(token_sink out = token_sink()); // -> [ STRING, \s+ ]
+		parser& try_number(token_sink out = token_sink()); // -> [ NUMBER ]
+		parser& try_number_ws(token_sink out = token_sink()); // -> [ NUMBER, \s+ ]
+		parser& try_variable(token_sink out = token_sink()); // -> [ VAR ]
+		parser& try_variable_ws(token_sink out = token_sink()); // -> [ VAR, \s+ ]
+		parser& try_complex_variable(token_sink out = token_sink()); // -> [ CVAR ]
+		parser& try_complex_variable_ws(token_sink out = token_sink()); // -> [ CVAR, \s+ ]
+		parser& try_filter(token_sink out = token_sink()); // -> [ FILTER ]
 		parser& try_comma(); // [ ',' ]
-		parser& try_argument_list(); // [ argument_list ]
-		parser& try_identifier(); // -> [ ID ]
-		parser& try_identifier_ws(); // -> [ ID, \s+ ]
-		parser& skip_to(const std::string& token); // -> [ prefix, token ]
-		parser& skipws(bool require, bool add_to_stack = true); // -> [ \s* ]
-		parser& skip_to_end(); // -> [ ... ]
-		parser& try_parenthesis_expression(); // [ ... ]
+		parser& try_argument_list(token_sink out = token_sink()); // [ argument_list ]
+		parser& try_param_list(token_sink out = token_sink()); // [ param_list ]
+		parser& try_identifier(token_sink out = token_sink()); // -> [ ID ]
+		parser& try_identifier_ws(token_sink out = token_sink()); // -> [ ID, \s+ ]
+		parser& skip_to(const std::string& token, token_sink out = token_sink()); // -> [ prefix, token ]
+		parser& skipws(bool require); // -> [ \s* ]
+		parser& skip_to_end(token_sink out = token_sink()); // -> [ ... ]
+		parser& try_parenthesis_expression(token_sink out = token_sink()); // [ ... ]
 
 		// input: skip any whitespaces, find '%>' or '% >'
 		// stack: add '%>' or '% >'
 		parser& try_close_expression(); // %> and variations 
 		
-		template<typename T=std::string>
-		T get(int n);
 		bool failed() const;
 		bool finished() const;
 		operator bool() const;
@@ -633,28 +705,16 @@ namespace cppcms { namespace templates {
 		void raise(const std::string& msg);
 		void raise_at_line(const file_position_t& line, const std::string& msg);
 
-		details_t& details();
-
 		// state
+		// save current state 
 		void push();
+		// reset to last saved state
 		parser& reset();
+		// forget last saved state
 		void pop();
+		// compress all stack entries between last saved state and current into one entry
+		void compress();
 	};
-
-	template<typename T>
-	T parser::get(int n) {
-		if(failed_) {
-			throw std::logic_error("Attempt to get value from failed parser");
-		} else if(static_cast<size_t>(-n) > stack_.size()) {
-			throw std::logic_error("Value index too large");
-		} else if(n >= 0) {
-			throw std::logic_error("get(n>=0) is invalid");
-		} else {
-			return boost::lexical_cast<T>(stack_[stack_.size()+n].token);
-		}
-	}
-
-
 
 	class template_parser {
 		parser p;
@@ -663,7 +723,7 @@ namespace cppcms { namespace templates {
 
 		ast::using_options_t parse_using_options(std::vector<std::string>&);
 	public:
-		template_parser(const std::string& input);
+		template_parser(const std::vector<std::string>& files);
 
 		void parse();
 

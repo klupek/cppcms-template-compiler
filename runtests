@@ -1,5 +1,26 @@
 #!/bin/bash
 
+function runtest() {
+	name=$1
+	tmp=$(mktemp)
+	perl join_strings.pl  tmp/${name}.cpp > tmp/${name}.cpp.new && mv tmp/${name}.cpp{.new,}
+	perl -pe 's:\\":\\x22:g' -i tmp/${name}.cpp
+	indent -ut -kr tmp/${name}.cpp
+	if diff -au tests/${name}.expected.cpp tmp/${name}.cpp > $tmp; then
+		echo "$name: OK";
+	else
+		if [ -f tests/${name}.diff ] && diff <(tail -n +3 $tmp) <(tail -n +3 tests/${name}.diff) >/dev/null; then
+			echo "$name: diff OK"
+		else
+			echo "$name: FAILED";
+			cat $tmp
+			unlink "$tmp"
+			exit;
+		fi				
+	fi
+	unlink "$tmp"
+}
+
 mkdir -p tmp;
 for f in tests/*.tmpl; do
 	name=$(basename "$f" .tmpl)
@@ -9,17 +30,11 @@ for f in tests/*.tmpl; do
 			arguments=$(cat tests/${name}.args);
 		fi
 		./parser $f --code > tmp/${name}.cpp $arguments
-		perl join_strings.pl  tmp/${name}.cpp > tmp/${name}.cpp.new && mv tmp/${name}.cpp{.new,}
-		perl -pe 's:\\":\\x22:g' -i tmp/${name}.cpp
-		indent -ut -kr tmp/${name}.cpp
-		if diff -au tests/${name}.expected.cpp tmp/${name}.cpp; then
-			echo "$name: OK";
-		else
-			echo "$name: FAILED";
-			exit
-		fi
+		runtest $name
 	else
 		echo "$name: no .expected file found"
 	fi
 done
 
+./parser --code tests/tutorial-2*.tmpl-x > tmp/tutorial-2.cpp
+runtest "tutorial-2"
