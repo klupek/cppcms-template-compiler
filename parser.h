@@ -646,9 +646,10 @@ namespace cppcms { namespace templates {
 
 	class parser {
 		parser_source source_;
+
+		// index stack, used (only) for back(n), going n tokens up
 		struct state_t {
 			size_t index;
-			std::string token;
 		};
 
 		std::vector<state_t> stack_;
@@ -661,7 +662,6 @@ namespace cppcms { namespace templates {
 
 		parser& try_token(const std::string& token);
 		parser& try_token_ws(const std::string& token);
-		parser& try_token_nl(const std::string& token);
 		parser& try_one_of_tokens(const std::vector<std::string>& tokens, token_sink out = token_sink());
 
 
@@ -682,7 +682,7 @@ namespace cppcms { namespace templates {
 		parser& try_identifier(token_sink out = token_sink()); // -> [ ID ]
 		parser& try_identifier_ws(token_sink out = token_sink()); // -> [ ID, \s+ ]
 		parser& skip_to(const std::string& token, token_sink out = token_sink()); // -> [ prefix, token ]
-		parser& skipws(bool require, bool add_to_stack = true); // -> [ \s* ]
+		parser& skipws(bool require); // -> [ \s* ]
 		parser& skip_to_end(token_sink out = token_sink()); // -> [ ... ]
 		parser& try_parenthesis_expression(token_sink out = token_sink()); // [ ... ]
 
@@ -698,9 +698,14 @@ namespace cppcms { namespace templates {
 		void raise_at_line(const file_position_t& line, const std::string& msg);
 
 		// state
+		// save current state 
 		void push();
+		// reset to last saved state
 		parser& reset();
+		// forget last saved state
 		void pop();
+		// compress all stack entries between last saved state and current into one entry
+		void compress();
 	};
 
 	class template_parser {
