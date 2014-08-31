@@ -430,14 +430,40 @@ namespace cppcms { namespace templates {
 	file_position_t parser::line() const { return source_.line(); }
 
 	token_sink::token_sink(std::string& dst)
-		: target_(&dst) {}
+		: target_(&dst)
+		, details_(new std::stack<detail_t>()) {}
 
 	token_sink::token_sink() 
-		: target_(nullptr) {}
+		: target_(nullptr) 
+		, details_(new std::stack<detail_t>()) {}
 
 	void token_sink::put(const std::string& what) {
 		if(target_ != nullptr)
 			*target_ = what;
+	}
+
+	bool token_sink::has_details() const {
+		return !details_->empty();
+	}
+
+	void token_sink::add_detail(const std::string& what, const std::string& item) {
+		details_->push({what, item});
+	}
+
+	token_sink::detail_t token_sink::get_detail() {
+		if(details_->empty())
+			throw std::logic_error("bug: details empty");
+
+		detail_t result = details_->top();
+		details_->pop();
+		return result;
+	}
+		
+	const token_sink::detail_t& token_sink::top_detail() const {
+		if(details_->empty())
+			throw std::logic_error("bug: details empty");
+
+		return details_->top();
 	}
 
 	parser::parser(const std::vector<std::string>& files)
@@ -646,7 +672,7 @@ namespace cppcms { namespace templates {
 				std::string filter;
 				while(skipws(false).try_token("|").skipws(false).try_filter(filter)) { 
 					end = source_.index();
-					details_.emplace(detail_t { "complex_variable", filter });
+					out.add_detail("complex_variable", filter);
 				}
 				
 				back(4);
@@ -654,7 +680,7 @@ namespace cppcms { namespace templates {
 				
 				stack_.emplace_back(state_t {start, source_.slice(start, end) });				
 				out.put(source_.slice(start, end));
-				details_.emplace(detail_t { "complex_variable_name", var });
+				out.add_detail("complex_variable_name", var);
 #ifdef PARSER_DEBUG
 				std::cout << ">>> complex " << stack_.back().token << std::endl;
 #endif
@@ -724,12 +750,12 @@ namespace cppcms { namespace templates {
 						}
 
 						if(try_name(name)) {
-							// do not modify push_back order, or at least leave "param_end" first, as it is used as terminator
-							details_.push({ "param_end", "" });
-							details_.push({"is_ref", (is_ref ? "ref" : "") });
-							details_.push({"is_const", (is_const ? "const" : "") });
-							details_.push({"name", name});
-							details_.push({"type", type});
+							// do not order, or at least leave "param_end" first, as it is used as terminator
+							out.add_detail( "param_end", "" );
+							out.add_detail("is_ref", (is_ref ? "ref" : "") );
+							out.add_detail("is_const", (is_const ? "const" : "") );
+							out.add_detail("name", name);
+							out.add_detail("type", type);
 						} else {
 							raise("expected NAME");
 						}
@@ -768,11 +794,11 @@ namespace cppcms { namespace templates {
 
 						skipws(false);
 						if(try_variable(tmp)) {
-							details_.emplace(detail_t { "argument_variable", tmp });
+							out.add_detail("argument_variable", tmp);
 						} else if(back(1).try_string(tmp)) {
-							details_.emplace(detail_t { "argument_string", tmp });
+							out.add_detail("argument_string", tmp);
 						} else if(back(1).try_number(tmp)) {
-							details_.emplace(detail_t { "argument_number", tmp });
+							out.add_detail("argument_number", tmp);
 						} else {
 							raise("expected ')', string, number or variable");
 						}
@@ -1014,8 +1040,6 @@ namespace cppcms { namespace templates {
 		return ( stack_.empty() || stack_.back().index == source_.index() ) && !source_.has_next(); 
 	}
 
-	parser::details_t& parser::details() { return details_; }
-	
 	parser& parser::back(size_t n) {
 #ifdef PARSER_DEBUG
 		std::cout << "back for " << n << " levels, " << failed_ << " failed, stack size is " << stack_.size() << std::endl;
@@ -1408,17 +1432,17 @@ namespace cppcms { namespace templates {
 				p.reset().raise("expected %> after view definition");
 			}
 			p.pop();
-		} else if(p.reset().try_token_ws("template")) { // [ template, \s+, name, arguments, %> ]
+		} else if(p.reset().try_token_ws("template")) { // [ template, \s+, name, arguments, %> ]			
 			std::string function_name, arguments;
-			if(!p.try_name(function_name).try_param_list(arguments).try_close_expression()) {
+			token_sink argsink(arguments);
+			if(!p.try_name(function_name).try_param_list(argsink).try_close_expression()) {
 				p.raise("expected NAME(params...) %>");
 			}
 
 			expr::param_list_t::params_t params;
 			std::string name, type, is_const, is_ref;
-			while(!p.details().empty()) {
-				const auto top = p.details().top();
-				p.details().pop();
+			while(argsink.has_details()) {
+				const auto top = argsink.get_detail();
 				if(top.what == "name") {
 					name = top.item;
 				} else if(top.what == "type") {
@@ -1473,7 +1497,8 @@ namespace cppcms { namespace templates {
 		// and result options are processed 
 		if(p.try_token_ws("using")) {
 			std::string tmp;
-			while(p.skipws(false).try_complex_variable(tmp)) { // [ \s*, variable ]					
+			token_sink filter_sink(tmp);
+			while(p.skipws(false).try_complex_variable(filter_sink)) { // [ \s*, variable ]					
 				variables.emplace_back(tmp);
 #ifdef PARSER_TRACE
 				std::cout << "\tvariable " << tmp << std::endl;
@@ -1490,10 +1515,9 @@ namespace cppcms { namespace templates {
 			ast::using_options_t options;
 			std::vector<std::string> filters;
 			// it needs reversed stack, working on not-reversed stack is difficult
-			std::vector<parser::detail_t>  rstack;
-			while(!p.details().empty()) {
-				rstack.push_back(p.details().top());
-				p.details().pop();
+			std::vector<token_sink::detail_t>  rstack;
+			while(filter_sink.has_details()) {
+				rstack.push_back(filter_sink.get_detail());
 			}
 			for(auto i = rstack.rbegin(); i != rstack.rend(); ++i) {
 				const auto& op = *i;
@@ -1584,9 +1608,8 @@ namespace cppcms { namespace templates {
 
 			p.skipws(false);
 			std::string alist;
-			p.try_argument_list(alist); // [ argument_list ], cant fail
-			while(!p.details().empty()) 
-				p.details().pop(); // aka p.details().clear();
+			token_sink alist_sink(alist);
+			p.try_argument_list(alist_sink); // [ argument_list ], cant fail
 
 			if(p.skipws(true).try_token_ws("from").try_identifier_ws(tmp)) { // [ \s+, from, \s+, ID, \s+ ]
 				from = expr::make_identifier(tmp);
@@ -1731,13 +1754,12 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_variable_expression() {
 		p.push();
-		if(p.try_complex_variable().skipws(false).try_close_expression()) { // [ variable expression, \s*, %> ]
-			const expr::variable expr = expr::make_variable(p.details().top().item);			
-			std::vector<expr::filter> filters;			
-			p.details().pop();
-			while(!p.details().empty() && p.details().top().what == "complex_variable") {
-				filters.emplace_back(expr::make_filter(p.details().top().item));
-				p.details().pop();
+		token_sink sink;
+		if(p.try_complex_variable(sink).skipws(false).try_close_expression()) { // [ variable expression, \s*, %> ]
+			const expr::variable expr = expr::make_variable(sink.get_detail().item);			
+			std::vector<expr::filter> filters;		
+			while(sink.has_details() && sink.top_detail().what == "complex_variable") {
+				filters.emplace_back(expr::make_filter(sink.get_detail().item));
 			}
 			
 			current_ = current_->as<ast::has_children>().add<ast::variable_t>(expr, p.line(), filters);
