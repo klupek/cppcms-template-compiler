@@ -2,7 +2,7 @@
 <% skin admin_skin %>
 <% view page uses data::admin::page extends master %>
 <% template master_content() %>
-<div id="form" %>
+<div id="form">
 <h2><% if id %><% gt "Edit Page {1}" using id %><% else %><% gt "Create New Page" %><% end %></h2>
 <% if id %>
 <p><a href="<% url "/blog/page/preview" using id %>"><% gt "Preview..." %></a></p>

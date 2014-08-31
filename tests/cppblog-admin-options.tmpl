@@ -2,7 +2,7 @@
 <% skin admin_skin %>
 <% view options uses data::admin::options extends master %>
 <% template master_content() %>
-<div id="form" %>
+<div id="form">
 <h2><% gt "Options" %></h2>
 	<form action="<% url "." %>" method="post"><% csrf %>
 		<dl>

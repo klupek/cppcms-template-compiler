@@ -11,6 +11,8 @@
 #include <list>
 #include <boost/lexical_cast.hpp>
 
+// for demangle only
+#include <cxxabi.h>
 namespace cppcms { namespace templates {
 	struct file_position_t {
 		std::string filename;
@@ -22,6 +24,21 @@ namespace cppcms { namespace templates {
 	public:
 		error_at_line(const std::string& msg, const file_position_t& line);
 		const file_position_t& line() const;
+	};
+
+	// FIXME: make better (aka: copy of boost demangle) wrapper, or use newer (1.56) boost
+	inline std::string demangle(const char* name) {
+		std::size_t size = 0;
+		int status = 0;
+		char *demangled = abi::__cxa_demangle( name, NULL, &size, &status );
+		return demangled ? std::string(demangled) : ( std::string("[demangle failed:") + name + "]");
+	}
+
+	std::string translate_ast_object_name(const std::string& name); 
+
+	class bad_cast : public std::runtime_error {
+	public:
+		using std::runtime_error::runtime_error;
 	};
 	
 	namespace generator {
@@ -272,8 +289,14 @@ namespace cppcms { namespace templates {
 				try {
 					return dynamic_cast<T&>(*this); 
 				} catch(const std::bad_cast&) {
-					std::cerr << "bad dynamic cast from " << typeid(*this).name() << " to " << typeid(T()).name() << std::endl;
-					throw;
+					std::string tgt = demangle(typeid(T).name());
+					std::string src = demangle(typeid(*this).name());
+					// make some translations
+					const std::string msg = std::string("could not insert child node: parent node is ") 
+						+ translate_ast_object_name(src)
+					        + ", but it should be "
+						+ translate_ast_object_name(tgt);
+					throw bad_cast(msg);
 				}
 			}
 

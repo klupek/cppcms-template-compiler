@@ -2,7 +2,7 @@
 <% skin admin_skin %>
 <% view post uses data::admin::post extends master %>
 <% template master_content() %>
-<div id="form" %>
+<div id="form">
 <h2><% if id %><% gt "Edit Post {1}" using id %><% else %><% gt "Create New Post" %><% end %></h2>
 <% if id %>
 <p><a href="<% url "/blog/post/preview" using id %>"><% gt "Preview..." %></a></p>

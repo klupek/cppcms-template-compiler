@@ -260,6 +260,28 @@ namespace cppcms { namespace templates {
 
 		return std::string(std::istreambuf_iterator<char>{ifs}, std::istreambuf_iterator<char>{});
 	}
+	
+	std::string translate_ast_object_name(const std::string& name) {
+		const std::string prefix = "cppcms::templates::ast::";
+		const std::string suffix = "_t";
+		if(name == "cppcms::templates::ast::root_t")
+			return "skin";
+		else if(name == "cppcms::templates::ast::has_children_t")
+			return "(any block node, like template, if, foreach, ...)";
+		else if(name == "cppcms::templates::ast::cppcode_t")
+			return "c++";
+		else if(name == "cppcms::templates::ast::fmt_function_t")
+			return "(format function, like gt, url, ...)";
+		else if(name == "cppcms::templates::ast::if_t::condition_t")
+			return "if";
+		else if(name == "cppcms::templates::ast::foreach_t::part_t")
+			return "foreach child (item, separator, empty, prefix, suffix)";
+		else if(name.compare(0, prefix.length(), prefix) == 0 && name.compare(name.length() - suffix.length(), suffix.length(), suffix) == 0)
+			return name.substr(prefix.length(), name.length()-prefix.length()-suffix.length());		
+		else 
+			return name;
+
+	}
 
 	namespace generator {
 		void context::add_scope_variable(const std::string& name) {
@@ -399,6 +421,9 @@ namespace cppcms { namespace templates {
 				return file_position_t { fi.filename, line_ - fi.line_beg };
 			}
 		}
+		if(!file_indexes_.empty() && index_ == file_indexes_.back().end) 
+			return file_position_t { file_indexes_.back().filename, line_ - file_indexes_.back().line_beg };
+
 		throw std::logic_error("bug: file index not found");
 	}
 
@@ -541,6 +566,9 @@ namespace cppcms { namespace templates {
 				c = source_.next();
 			while(try_name()) {
 				end = source_.index();
+				if(!try_token("()")) 
+					back(1);
+
 				if(try_token(".")) {
 					end = source_.index();
 				} else if(back(1).try_token("->")) {
@@ -916,7 +944,8 @@ namespace cppcms { namespace templates {
 		const int context = 70;
 		const std::string left = source_.left_context(context);
 		const std::string right = source_.right_context(context);
-		throw std::runtime_error("Parse error at position " + boost::lexical_cast<std::string>(source_.index()) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
+		throw std::runtime_error("Parse error at line " + line().filename + ":" + boost::lexical_cast<std::string>(line().line) + ", file offset " +
+				boost::lexical_cast<std::string>(source_.index()) + " near '\n\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 		
 	}
 
 	void parser::raise_at_line(const file_position_t& file, const std::string& msg) {
@@ -927,9 +956,9 @@ namespace cppcms { namespace templates {
 		while(source_.line().line < file.line)
 			source_.move(1);
 		const std::string left = source_.left_context(context);
-		const std::string right = source_.right_context(context);
+		const std::string right = source_.right_context(context);		
 		source_.move_to(orig_index);
-		throw std::runtime_error("Error at position " + boost::lexical_cast<std::string>(source_.index()) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
+		throw std::runtime_error("Error at file " + file.filename + ":" + boost::lexical_cast<std::string>(file.line) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
 	}
 
 	bool parser::failed() const {
@@ -1060,12 +1089,16 @@ namespace cppcms { namespace templates {
 			}
 		} catch(const error_at_line& e) {
 			p.raise_at_line(e.line(), e.what());
-		} catch(const std::bad_cast&) {
-			std::string current_path = current_->sysname();
-			for(auto i = current_->parent(); i && i != i->parent(); i = i->parent())
-				current_path += " / " + i->sysname();
-			p.raise("invalid sequence: " + current_path);			
-			// FIXME: more verbose
+		} catch(const bad_cast& e) {
+			std::string current_path = (current_->sysname() == "root" ? "skin" : current_->sysname());
+			for(auto i = current_->parent(); i && i != i->parent(); i = i->parent()) {
+				if(i->sysname() == "root")
+					current_path += " / skin";
+				else
+					current_path += " / " + i->sysname();
+			}
+			const std::string msg = "\ncurrent object stack: " + current_path;
+			p.raise(e.what() + msg);	
 		} catch(const std::runtime_error& e) {
 			p.raise(e.what());
 		}
@@ -1196,10 +1229,10 @@ namespace cppcms { namespace templates {
 #endif
 		} else if(p.reset().try_token("end")) {
 			std::string what;
-			if(p.skipws(true).try_name_ws()) {
-				what = p.get(-2);
+			if(p.skipws(true).try_name()) {
+				what = p.get(-1);
 			} else {
-				p.back(3);
+				p.back(2);
 			}
 			if(!p.try_close_expression()) {
 				p.raise("expected %> after end " + what);
@@ -1309,8 +1342,8 @@ namespace cppcms { namespace templates {
 				view_name = p.get(-6);
 				data_name = p.get(-2);
 				p.push();
-				if(p.try_token_ws("extends").try_name_ws()) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
-					parent_name = p.get(-2);
+				if(p.try_token_ws("extends").try_name()) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
+					parent_name = p.get(-1);
 				} else {
 					p.reset();
 				}
@@ -1434,10 +1467,11 @@ namespace cppcms { namespace templates {
 
 	bool template_parser::try_render_expression() {
 		p.push();
-		if(p.try_token("gt").skipws(false).try_string_ws() || p.back(4).try_token_ws("pgt").try_string_ws()) { // [ gt|pgt, \s+, string, \s+ ]
-			const std::string verb = p.get(-4);
-			const expr::string fmt = expr::make_string(p.get(-2));
+		if(p.try_token("gt").skipws(false).try_string() || p.back(4).try_token_ws("pgt").try_string()) { // [ gt|pgt, \s+, string, \s+ ]
+			const std::string verb = p.get(-3);
+			const expr::string fmt = expr::make_string(p.get(-1));
 			std::vector<std::string> variables;
+			p.skipws(false);
 			auto options = parse_using_options(variables);
 			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %> after gt expression");
@@ -3098,7 +3132,7 @@ int main(int argc, char **argv) {
 		} else if(v == "--parse") {
 			mode = parse;
 		} else if(v == "-s") {
-			if(i == argc) {
+			if(i == argc-1) {
 				usage(argv[0]);
 			} else {
 				ctx.skin = argv[i+1];
@@ -3112,16 +3146,24 @@ int main(int argc, char **argv) {
 	if(files.empty())
 		usage(argv[0]);
 	
-	cppcms::templates::template_parser p(files);
-	p.parse();
-	if(mode == ast) {
-		p.tree()->dump(std::cout);
-	} else if(mode == code) {
-		p.write(ctx, std::cout);
-	} else {
-		std::ostringstream oss;
-		p.write(ctx, oss);
-		std::cout << "parse: ok\n";
+	try {
+		cppcms::templates::template_parser p(files);
+		p.parse();
+		if(mode == ast) {
+			p.tree()->dump(std::cout);
+		} else if(mode == code) {
+			p.write(ctx, std::cout);
+		} else {
+			std::ostringstream oss;
+			p.write(ctx, oss);
+			std::cout << "parse: ok\n";
+		}
+	} catch(const std::logic_error& e) {
+		std::cerr << "logic error(bug): " << e.what() << std::endl;
+		return 2;
+	} catch(const std::runtime_error& e) {
+		std::cerr << e.what() << std::endl;
+		return 3;
 	}
 
 	return 0;

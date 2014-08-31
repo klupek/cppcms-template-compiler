@@ -10,7 +10,7 @@ function prep() {
 
 for f in tests/*.tmpl; do
 	name=$(basename "$f" .tmpl)
-	if [ ! -f tests/${name}.expected.cpp -o tests/${name}.tmpl -nt tests/${name}.expected.cpp ]; then
+	if [ ! -f tests/${name}.expected.cpp -o tests/${name}.tmpl -nt tests/${name}.expected.cpp ] || [ -f tests/${name}.args -a tests/${name}.args -nt tests/${name}.expected.cpp ] ; then
 		arguments=""
 		if [ -f tests/${name}.args ]; then 
 			arguments=$(cat tests/${name}.args);
