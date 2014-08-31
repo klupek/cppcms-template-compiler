@@ -1,0 +1,16 @@
+--- tests/examples-localization-view.expected.cpp	2014-09-01 01:05:46.757134509 +0200
++++ tmp/examples-localization-view.cpp	2014-09-01 01:06:28.256285918 +0200
+@@ -25,11 +25,11 @@
+ 	    if ((cppcms::locale::translate("LTR").str(out().getloc()) ==
+ 		 "RTL")) {
+ #line 11 "tests/examples-localization-view.tmpl"
+-		out() << "\n    <body dir=\x22rtl\x22>\n";
++		out() << "\n    <body dir=\x22rtl\x22>\n    ";
+ #line 11 "tests/examples-localization-view.tmpl"
+ 	    } else {
+ #line 13 "tests/examples-localization-view.tmpl"
+-		out() << "\n    <body>\n";
++		out() << "\n    <body>\n    ";
+ #line 13 "tests/examples-localization-view.tmpl"
+ 	    }
+ #line 14 "tests/examples-localization-view.tmpl"

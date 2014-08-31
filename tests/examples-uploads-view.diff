@@ -1,0 +1,11 @@
+--- tests/examples-uploads-view.expected.cpp	2014-09-01 01:05:47.125023648 +0200
++++ tmp/examples-uploads-view.cpp	2014-09-01 01:09:11.671367816 +0200
+@@ -20,7 +20,7 @@
+ 	virtual void render() {
+ #line 10 "tests/examples-uploads-view.tmpl"
+ 	    out() <<
+-		"\n<html>\n   <body>\n    <!-- Specify enctype=\x22multipart/form-data\x22 to be able to upload files -->\n\n    <form method=\x22post\x22 action=\x22\x22 enctype=\x22multipart/form-data\x22 >\n";
++		"\n<html>\n   <body>\n    <!-- Specify enctype=\x22multipart/form-data\x22 to be able to upload files -->\n\n    <form method=\x22post\x22 action=\x22\x22 enctype=\x22multipart/form-data\x22 >\n    ";
+ #line 10 "tests/examples-uploads-view.tmpl"
+ 	    {
+ 		cppcms::form_context _form_context(out(),

@@ -1,0 +1,11 @@
+--- tests/examples-basic_cache-view.expected.cpp	2014-09-01 01:05:46.642889734 +0200
++++ tmp/examples-basic_cache-view.cpp	2014-09-01 01:05:49.840695321 +0200
+@@ -29,7 +29,7 @@
+ 	    out() << cppcms::filters::escape(content.fact);
+ #line 10 "tests/examples-basic_cache-view.tmpl"
+ 	    out() <<
+-		"</h2>\n    <form method=\x22post\x22 action=\x22\x22 >\n";
++		"</h2>\n    <form method=\x22post\x22 action=\x22\x22 >\n    ";
+ #line 10 "tests/examples-basic_cache-view.tmpl"
+ 	    {
+ 		cppcms::form_context _form_context(out(),

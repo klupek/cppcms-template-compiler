@@ -1,0 +1,17 @@
+--- tests/examples-forms-view.expected.cpp	2014-09-01 01:05:46.702632415 +0200
++++ tmp/examples-forms-view.cpp	2014-09-01 01:06:07.921765190 +0200
+@@ -43,11 +43,12 @@
+ #line 11 "tests/examples-forms-view.tmpl"
+ 	    } else {
+ #line 13 "tests/examples-forms-view.tmpl"
+-		out() << "\n    \t<h1>Input your details</h1>\n";
++		out() << "\n    \t<h1>Input your details</h1>\n    ";
+ #line 13 "tests/examples-forms-view.tmpl"
+ 	    }
+ #line 15 "tests/examples-forms-view.tmpl"
+-	    out() << "\n    <form method=\x22post\x22 action=\x22\x22 >\n";
++	    out() <<
++		"\n    <form method=\x22post\x22 action=\x22\x22 >\n    ";
+ #line 15 "tests/examples-forms-view.tmpl"
+ 	    {
+ 		cppcms::form_context _form_context(out(),

@@ -1,0 +1,11 @@
+--- tests/examples-templates_inheritance-news.expected.cpp	2014-09-01 01:05:47.023356279 +0200
++++ tmp/examples-templates_inheritance-news.cpp	2014-09-01 01:07:25.032789226 +0200
+@@ -29,7 +29,7 @@
+ #line 5 "tests/examples-templates_inheritance-news.tmpl"
+ 	    if ((content.news_list).begin() != (content.news_list).end()) {
+ #line 7 "tests/examples-templates_inheritance-news.tmpl"
+-		out() << "\n    <ul>\n";
++		out() << "\n    <ul>\n    ";
+ #line 7 "tests/examples-templates_inheritance-news.tmpl"
+ 		for (CPPCMS_TYPEOF((content.news_list).begin())message_ptr
+ 		     = (content.news_list).begin(), message_ptr_end =

@@ -1,0 +1,22 @@
+--- tests/examples-sessions-view.expected.cpp	2014-09-01 01:05:46.815829073 +0200
++++ tmp/examples-sessions-view.cpp	2014-09-01 01:06:46.176992074 +0200
+@@ -35,15 +35,16 @@
+ #line 9 "tests/examples-sessions-view.tmpl"
+ 		out() << cppcms::filters::escape(content.age);
+ #line 11 "tests/examples-sessions-view.tmpl"
+-		out() << "</p>\n        <h2>Change details</h2>\n";
++		out() << "</p>\n        <h2>Change details</h2>\n    ";
+ #line 11 "tests/examples-sessions-view.tmpl"
+ 	    } else {
+ #line 13 "tests/examples-sessions-view.tmpl"
+-		out() << "\n        <h2>Input your details</h2>\n";
++		out() << "\n        <h2>Input your details</h2>\n    ";
+ #line 13 "tests/examples-sessions-view.tmpl"
+ 	    }
+ #line 15 "tests/examples-sessions-view.tmpl"
+-	    out() << "\n    <form method=\x22post\x22 action=\x22\x22 >\n";
++	    out() <<
++		"\n    <form method=\x22post\x22 action=\x22\x22 >\n    ";
+ #line 15 "tests/examples-sessions-view.tmpl"
+ 	    {
+ 		cppcms::form_context _form_context(out(),
