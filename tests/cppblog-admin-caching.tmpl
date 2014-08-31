@@ -1,0 +1,19 @@
+<% c++ #include "data/admin/caching.h" %>
+<% skin admin_skin %>
+<% view caching uses data::admin::caching extends master %>
+<% template master_content() %>
+<div id="form">
+<% if is_active %>
+	<p><% ngt "Cached one entry.","Cached {1,num} entries.",size using size %></p>
+	<p>
+		<form action="<% url "." %>" method="post"><% csrf %>
+		<input type="submit" name="clear" value="<% gt "Clear Cache" %>" />
+		</form>
+	</p>
+<% else %>
+	<p><% gt "The caching system is disabled." %></p>
+<% end %>
+</div>
+<% end template%>
+<% end view %>
+<% end skin %>

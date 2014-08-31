@@ -1,0 +1,60 @@
+<% c++ #include "data/config.h" %>
+<% skin admin_skin %>
+<% view base_config uses data::base_config %>
+<% template body() %><% end %>
+<% template title() %><% end %>
+<% template render() %>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title><% include title() %></title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<link href="<%= media %>/adminstyle.css" rel="stylesheet" type="text/css" />
+<% if rtl %>
+	<link href="<%= media %>/adminstyle-rtl.css" rel="stylesheet" type="text/css" />
+<% else %>
+	<link href="<%= media %>/adminstyle-ltr.css" rel="stylesheet" type="text/css" />
+<% end %>
+</head>
+<body>
+<div id="page">
+<div id="header">
+
+<h1><% include title() %></h1>
+
+</div>
+
+<div id="form" %>
+<% include body() %>
+</div>
+
+<div id="footer">
+<p>
+<% gt "CppBlog is a high performance blog written in C++." %>
+</p>
+</div>
+</div>
+</body>
+</html>
+<% end template %>
+<% end view %>
+
+<% view config uses data::config extends base_config %>
+<% template title() %><% gt "Configure Blog" %><% end %>
+<% template body() %>
+<form action="<% url "/config" %>" method="post" ><% csrf %>
+<% form as_dl form %>
+</form>
+<% end %>
+<% end %>
+
+<% view config_version uses data::config_version extends base_config %>
+<% template title() %><% gt "Database version is invalid" %><% end %>
+<% template body() %>
+<p><% gt "The database version and the software versions do not match. Expected version {1}, current version {2}" using expected, version %></p>
+<p><% gt "Please run SQL database upgrade scripts." %></p>
+<% end %>
+<% end %>
+
+<% end skin %>

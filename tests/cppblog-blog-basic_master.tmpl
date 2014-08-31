@@ -1,0 +1,48 @@
+<% c++ #include "data/blog/master.h" %>
+<% skin %>
+<% view basic_master uses data::blog::master %>
+<% template scripts() %>
+	<script type="text/javascript">
+	<!--
+                function set_cookie(c_name,value,expiredays)
+                {
+                        var exdate=new Date();
+                        exdate.setDate(exdate.getDate()+expiredays);
+                        document.cookie='<%= cookie_prefix %>_' + c_name+ "=" + encodeURIComponent(value)+
+                        ((expiredays==null) ? "" : ";expires="+exdate.toGMTString())+
+                        ';path=/';
+                }
+                function get_any_cookie(c_name)
+                {
+                        if (document.cookie.length>0){
+                                c_start=document.cookie.indexOf(c_name + "=");
+                                if (c_start!=-1){ 
+                                        c_start=c_start + c_name.length+1; 
+                                        c_end=document.cookie.indexOf(";",c_start);
+                                        if (c_end==-1) c_end=document.cookie.length;
+                                                return decodeURIComponent(document.cookie.substring(c_start,c_end));
+                                } 
+                        }
+                        return "";
+                }
+                function get_cookie(c_name)
+                {
+                	c_name='<%= cookie_prefix %>_' + c_name; 
+			return get_any_cookie(c_name);
+                }
+		function is_admin()
+		{
+			return get_cookie('user').length > 0;
+		}
+		function write_if_admin(message)
+		{
+			if(is_admin()) {
+				document.write(message);
+			}
+		}
+	-->
+	</script>
+<% end template %>
+<% end view %>
+<% end skin %>
+

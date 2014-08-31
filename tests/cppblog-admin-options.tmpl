@@ -1,0 +1,15 @@
+<% c++ #include "data/admin/options.h" %>
+<% skin admin_skin %>
+<% view options uses data::admin::options extends master %>
+<% template master_content() %>
+<div id="form" %>
+<h2><% gt "Options" %></h2>
+	<form action="<% url "." %>" method="post"><% csrf %>
+		<dl>
+			<% form as_dl form %>
+		</dl>
+	</form>
+</div>
+<% end template%>
+<% end view %>
+<% end skin %>

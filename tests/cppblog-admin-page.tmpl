@@ -1,0 +1,24 @@
+<% c++ #include "data/admin/page.h" %>
+<% skin admin_skin %>
+<% view page uses data::admin::page extends master %>
+<% template master_content() %>
+<div id="form" %>
+<h2><% if id %><% gt "Edit Page {1}" using id %><% else %><% gt "Create New Page" %><% end %></h2>
+<% if id %>
+<p><a href="<% url "/blog/page/preview" using id %>"><% gt "Preview..." %></a></p>
+<% end %>
+<form action="<% if id %><% url "/admin/page" using id %><% else %><% url "/admin/page" %><% end %>" method="post" ><% csrf %>
+	<div id="form_title" >
+		<dl>
+		<% form as_dl form.title %>
+		</dl>
+	</div>
+	<dl>
+		<% form as_dl form.content %>
+		<dd><% form as_space form.buttons %></dd>
+	</dl>
+</form>
+</div>
+<% end template %>
+<% end view %>
+<% end skin %>

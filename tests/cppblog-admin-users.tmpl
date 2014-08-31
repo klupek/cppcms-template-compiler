@@ -1,0 +1,16 @@
+<% c++ #include "data/admin/users.h" %>
+<% skin admin_skin %>
+<% view users uses data::admin::users extends master %>
+<% template master_content() %>
+<form action="<% url "/admin/users" %>" method="post"><% csrf %>
+	<center>
+		<div style="padding:50px; font-size:200%;">
+			<table style="text-align:left" >
+				<% form as_table login %>
+			</table>
+		</div>
+	</center>
+</form>
+<% end %>
+<% end view %>
+<% end skin %>

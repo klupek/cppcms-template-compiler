@@ -1,0 +1,66 @@
+<% c++ #include "data/admin/post.h" %>
+<% skin admin_skin %>
+<% view post uses data::admin::post extends master %>
+<% template master_content() %>
+<div id="form" %>
+<h2><% if id %><% gt "Edit Post {1}" using id %><% else %><% gt "Create New Post" %><% end %></h2>
+<% if id %>
+<p><a href="<% url "/blog/post/preview" using id %>"><% gt "Preview..." %></a></p>
+<% end %>
+<script type="text/javascript">
+<!--
+	function switchvis(id)
+	{
+		val=document.getElementById(id).style.display;
+		if(val=='inline') 
+			val='none';
+		else
+			val='inline';
+		document.getElementById(id).style.display=val;
+	}
+-->
+</script>
+<form action="<% if id %><% url "/admin/post" using id %><% else %><% url "/admin/post" %><% end %>" method="post" ><% csrf %>
+	<dl id="form_title" >
+		<% form as_dl form.title %>
+	</dl>
+	<dl>
+		<dt><% gt "Categories:" %></dt>
+		<dd>
+			<p>
+			<% foreach cat in form.del_from_cat_list %>
+			<% gt "The post is published under catergories:"%>
+			<% separator %>, <% item %><%= cat->help() %><% end %>
+			<% empty %>
+			<% gt "No categories assigned to this post."%>
+			<% end %>
+			<a href="javascript:switchvis('editcats');"><% gt "(click to edit)" %></a>
+			</p>
+			<div id="editcats" style="display:none" >
+			<% foreach cat in form.del_from_cat_list %>
+				<p><strong><% gt "Remove From Categories:" %></strong></p>
+				<ul class="catlist">
+				<% item %>
+				<li><% form as_space *cat %></li>
+				<% end %>
+				</ul>
+			<% end %>
+			<% foreach cat in form.add_to_cat_list %>
+				<p><strong><% gt "Add To Categories:" %></strong></p>
+				<ul class="catlist">
+				<% item %>
+				<li><% form as_space *cat %></li>
+				<% end %>
+				</ul>
+			<% end %>
+			</div>		
+		</dd>
+		<% form as_dl form.abstract %>
+		<% form as_dl form.content %>
+		<dd><% form as_space form.buttons %></dd>
+	</dl>
+</form>
+</div>
+<% end template %>
+<% end view %>
+<% end skin %>

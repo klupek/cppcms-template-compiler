@@ -1,0 +1,17 @@
+<% c++ #include "data/admin/comment.h" %>
+<% skin admin_skin %>
+<% view comment uses data::admin::comment extends master %>
+<% template master_content() %>
+<div id="form" %>
+<h2><% gt "Edit comment" %></h2>
+<p><a href="<% url "/blog/post" using post_id %>#comment_<%= id %>"><% gt "Go back to the post" %></a></p>
+<form action="<% url "/admin/comment" using id %>" method="post"><% csrf %>
+	<dl>
+		<% form as_dl form.data %>
+	</dl>
+	<p><% form as_space form.buttons %></p>
+</form>
+</div>
+<% end template%>
+<% end view %>
+<% end skin %>

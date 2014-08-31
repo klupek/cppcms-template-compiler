@@ -3,3 +3,30 @@ Known generated code differences (from original cppcms_tmpl_cc), using compat mo
 		#include moved to first line (when parsing multiple files)
 		collaped skin namespace(closing, opening the same namespace)
 		whitespaces before '^' and <% item %> not trimmed
+
+
+Tests:
+	tests/wikipp-*.tmpl are GPL3 licensed code files used as DATA, therefore they do not infect parser code with GPL virus.
+	tests/cppblog-*.tmpl look like GPL code files (according to './media/orangesky-rtl.css:License: GPL'), and they are used as DATA, therefore they also do not infect parser code with GPL virus.
+	tests/cppblog-admin-caching.tmpl was fixed:
+		original:
+			<% template master_content() %>
+			<div id="form" %>
+		fixed: 
+			<% template master_content() %>
+			<div id="form">
+	rest of the test files includes code copied from cppcms tutorial licensed under GFDL, and they are also used as DATA.
+
+License(s):
+	tests/cppblog-*.tmpl are distributed under some GPL license, the same license cppblog is (not specified in sources/svn)
+		source: svn co https://cppcms.svn.sourceforge.net/svnroot/cppcms/blog/trunk cppblog
+	tests/wikipp-*.tmpl are distributed under GPL3 license.
+		source: svn co https://cppcms.svn.sourceforge.net/svnroot/cppcms/wikipp/trunk wikipp
+	test files: 	cache-1.tmpl foreach-1.tmpl form-1.tmpl if-1.tmpl include-1.tmpl internationalization-1.tmpl render-1.tmpl 
+			template-1.tmpl top-1.tmpl top-2.tmpl top-3.tmpl tutorial-1.tmpl tutorial-3.tmpl tutorial-4.tmpl url-1.tmpl 
+			using-1.tmpl variables-1.tmpl
+		contain code from cppcms tutorial and they seem to be licensed under GFDL
+		source: http://cppcms.com/wikipp/en/page/cppcms_1x_templates
+	
+	everything else in this project: MIT
+	

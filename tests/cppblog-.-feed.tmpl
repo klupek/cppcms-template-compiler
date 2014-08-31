@@ -1,0 +1,67 @@
+<% c++ #include "data/feed.h" %>
+<% skin feed %>
+<% view master uses data::feed::master %>
+<% template render() %><?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+	<title><% include title() %></title>
+	<link>http://<%= host %><% url "/blog/summary" %></link>
+	<description><%= info.blog_description %></description>
+	<atom:link 
+		href="http://<%= host %><% include feed_url() %>" 
+		rel="self" type="application/rss+xml" />
+	<% include items() %>
+</channel>
+</rss>
+<% end %>
+<% template title() %><%= info.blog_title %><% end template %>
+<% template feed_url() %><% end %>
+<% template items() %><% end %>
+<% end %>
+
+<% view comments uses data::feed::comments extends master%>
+<% template title() %><% include master::title() %> :: <% gt "comments" %><% end %>
+<% template feed_url() %><% url "/feed/comments" %><% end %>
+<% template items() %>
+<% foreach comment in items %>
+	<% item %>
+	<item>
+		<title><%= comment.author %></title>
+		<link>http://<%= host %><% url "/blog/post" using comment.post_id %>#comment_<%= comment.id %></link>
+		<guid>http://<%= host %><% url "/blog/post" using comment.post_id %>/<%= comment.id %></guid>
+		<description>
+		&lt;div style=&quot;direction:<% if rtl %>rtl<% else %>ltr<% end %>&quot;&gt;
+		<%= comment.content | ext markdown2html | ext xss | escape %>
+		&lt;/div&gt;
+		</description>
+	</item>
+	<% end %>
+<% end %>
+<% end template %>
+<% end view %>
+<% view posts uses data::feed::posts extends master %>
+<% template title() %><% if id %><% include master::title() %> :: <%= category %><% else %><% include master::title() %><% end %><% end %>
+<% template feed_url() %><% if id %><% url "/feed/posts" using id %><% else %><% url "/feed/posts" %><% end %><% end template %>
+<% template items() %>
+<% foreach post in items %>
+	<% item %>
+	<item>
+		<title><%= post.title %></title>
+		<link>http://<%= host %><% url "/blog/post" using post.id %></link>
+		<guid>http://<%= host %><% url "/blog/post" using post.id %></guid>
+		<description>
+		&lt;div style=&quot;direction:<% if rtl %>rtl<% else %>ltr<% end %>&quot;&gt;
+		<%= post.abstract | ext latex | ext markdown2html | escape %>
+		<% if post.has_content %>
+		&lt;p&gt;
+		&lt;a href="<% url "/blog/post" using post.id %>"&gt;<% gt "more..." %>&lt;/a&gt;
+		&lt;/p&gt;
+		<% end %>
+		&lt;/div&gt;
+		</description>
+	</item>
+	<% end %>
+<% end %>
+<% end template %>
+<% end view %>
+<% end skin %>

@@ -1,0 +1,62 @@
+<% c++ #include "data/admin/master.h" %>
+<% skin admin_skin %>
+<% view master uses data::admin::master %>
+<% template render() %>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title><% gt "Admin Protal" %></title>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+	<link href="<%= media %>/adminstyle.css" rel="stylesheet" type="text/css" />
+<% if rtl %>
+	<link href="<%= media %>/adminstyle-rtl.css" rel="stylesheet" type="text/css" />
+<% else %>
+	<link href="<%= media %>/adminstyle-ltr.css" rel="stylesheet" type="text/css" />
+<% end %>
+</head>
+<body>
+<div id="page">
+<div id="header">
+
+<div id="logout">
+<p>
+        	<a href="<% url "/blog/summary" %>"><% gt "Blog" %></a> | <a href="<% url "/admin/summary" %>"><% gt "Admin" %></a> | <a href="<% url "/admin/users" %>"><% gt "Logout" %></a>
+</p>
+</div>
+
+<h1><a href="<% url "/blog/summary" %>"><%= info.blog_title %></a></h1>
+<h2><% gt "Administration Panel" %></h2>
+
+</div>
+<div id="path">
+	<a href="<% url "/admin/summary" %>"><% gt "main" %></a>
+	&nbsp;/&nbsp;
+	<a href="<% url "/admin/post" %>"><% gt "write post" %></a>
+	&nbsp;/&nbsp;
+	<a href="<% url "/admin/page"  %>"><% gt "write page" %></a>
+	&nbsp;/&nbsp;
+        <a href="<% url "/admin/categories"  %>"><% gt "categories" %></a>
+	&nbsp;/&nbsp;
+        <a href="<% url "/admin/options"  %>"><% gt "options" %></a>
+	&nbsp;/&nbsp;
+        <a href="<% url "/admin/caching"  %>"><% gt "cache" %></a>
+</div>
+
+<% include master_content() %>
+
+<div id="footer">
+<p>
+<% gt "CppBlog is a high performance blog written in C++." %>
+</p>
+<p>
+<% gt "This software is availible under GNU GPL Licence, &copy; 2008-2011 Artyom Beilis." %>
+</p>
+</div>
+</div>
+</body>
+</html>
+<% end template %>
+<% template master_content() %><% end %>
+<% end view %>
+<% end skin %>

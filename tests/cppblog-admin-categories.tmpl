@@ -1,0 +1,54 @@
+<% c++ #include "data/admin/categories.h" %>
+<% skin admin_skin %>
+<% view categories uses data::admin::categories extends master %>
+<% template master_content() %>
+<div id="form" %>
+
+	<script language="javascript">
+	<!--
+	function switchvis(id)
+	{
+		val=document.getElementById(id).style.display;
+		if(val=='inline') 
+			val='none';
+		else
+			val='inline';
+		document.getElementById(id).style.display=val;
+	}
+	-->
+	</script>
+	<% if not empty error_message %>
+		<h2><%= error_message %></h2>
+	<% end %>
+	<% foreach cat in current_categories %>
+	<h2><% gt "Categories" %></h2>
+	<ul>
+		<% item %>
+		<li><p><%= cat.name %> | <a href="javascript:switchvis('cat<%= cat.id %>');" ><% gt "edit" %></a></p>
+		<div id="cat<%= cat.id %>" style="display:none" >
+			<form action="<% url "."  %>" method="post" ><% csrf %>
+				<input type="hidden" name="id" value="<%= cat.id %>" />
+				<input type="text" name="cat" value="<%= cat.name %>" size="20" />
+				<input type="submit" name="save" value="<% gt "Sumbit" %>" />
+				<input type="submit" name="remove" value="<% gt "Delete" %>" />
+				<% gt "Delete from posts:" %><input type="checkbox" name="cascade" value="1" />
+			</form>
+		</div>
+		</li>
+		<% end %>
+	</ul>
+	<% empty %>
+		<h2><% gt "There are no categories" %></h2>
+	<% end %>
+	
+	<form action="<% url "." %>" method="post" ><% csrf %>
+	<p>
+		<% gt "New category:" %>
+		<input type="text" name="cat" size="20" />
+		<input type="submit" name="save" value="<% gt "Sumbit" %>" />
+	</p>
+	</form>
+</div>
+<% end template%>
+<% end view %>
+<% end skin %>

@@ -1,0 +1,65 @@
+<% c++ #include "data/blog/summary.h" %>
+<% skin %>
+<% view summary uses data::blog::summary extends master %>
+<% template menu_addons() %>
+<% if id %>
+<% include menu_addon_prefix() %><a href="<% url "/feed/posts" using id %>"><% gt "RSS for {1}" using category_name %></a><% include menu_addon_suffix() %>
+<% end %>
+<% end template %>
+<% template master_content() %>
+<% if not empty category_name %>
+		<h1 class="categorytitle" ><% gt "Posts in category &#8216;{1}&#8217;." using category_name %></h1>
+<% end %>
+<% foreach post in posts %>
+	<% item %>
+		<h1><a href="<% url "/blog/post" using post.id %>"><%= post.title %></a></h1>
+		<div class="published">
+			<% gt "{1,date=f}, by {2} " using post.published, post.author %>;
+	<% foreach cat in post.categories %>
+		<% gt "Posted in:" %> 
+		<% separator %>, <% item %><a href="<% url "category" using cat.id %>"><%= cat.name %></a><% end %>;
+	<% end %>
+	<a href="<% url "/blog/post" using post.id %>#comments_pos"><% ngt "one comment","{1,num} comments", post.comment_count using post.comment_count %></a>	
+		<script type="text/javascript">
+		<!--
+			write_if_admin('| <a href="<% url "/admin/post" using post.id %>"><% gt "edit" %></a>');
+		-->
+		</script>	
+		</div>
+		<%= post.abstract | ext latex | ext markdown2html %>
+                <% if post.has_content %>
+                        <a href="<% url "/blog/post" using post.id %>#more"><% gt "more..." %></a>
+                <% end %>
+	<% end %>
+	<div>
+	<% if page %>
+                <p class="prevpage">
+			<% if id %>
+	                        <a href="<% url "category" using id,prev_page  %>"><% gt "next page" %></a>
+			<% else %>
+	                        <a href="<% url "." using prev_page  %>"><% gt "previous page" %></a>
+			<% end %>
+                </p>
+        <% end %>
+	<% if next_page %>
+                <p class="nextpage">
+			<% if id %>
+	                        <a href="<% url "category" using id,next_page  %>"><% gt "next page" %></a>
+			<% else %>
+	                        <a href="<% url "." using next_page  %>"><% gt "next page" %></a>
+			<% end %>
+                </p>
+        <% end %>
+		<div style="clear: both"></div>
+	</div>
+	
+<% empty %>
+	<% if not empty category_name %>
+		<h1><% gt "There are not posts in category &#8216;{1}&#8217;" using category_name %></h1>
+	<% else %>
+		<h1><% gt "There are no posts in the blog" %></h1>
+	<% end %>
+<%end%>
+<% end template %>
+<% end %>
+<% end %>

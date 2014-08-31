@@ -1,0 +1,9 @@
+<% c++ #include "data/blog/page.h" %>
+<% skin %>
+<% view page uses data::blog::page extends master %>
+<% template master_content() %>
+<h1><a href="<% url "/blog/page" using id %>"><%= title %></a></h1>
+<%= content | ext  markdown2html %>
+<% end template %>
+<% end view %>
+<% end skin %>

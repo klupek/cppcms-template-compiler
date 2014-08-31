@@ -1,0 +1,42 @@
+<% c++ #include "data/admin/summary.h" %>
+<% skin admin_skin %>
+<% view summary uses data::admin::summary extends master %>
+<% template master_content() %>
+<div id="menu">
+        <h2><% gt "Unpublished Posts" %></h2>
+        <% foreach post in posts %>
+	        <ul>
+        	<% item %>
+			<li><a href="<% url "/admin/post" using post.id %>"><%= post.title %></a></li>
+		<% end %>
+		</ul>
+	<% empty %>
+		<p><% gt "No unpublished posts" %></p>
+	<% end%>
+</div>
+<div id="news">
+        <h2><% gt "Pages" %></h2>
+        <% foreach page in pages %>
+	        <ul>
+        	<% item %>
+			<li><a href="<% url "/admin/page" using page.id %>"><%= page.title %></a><% if not page.is_open %> <% gt "(not published)" %><%end%></li>
+		<% end %>
+		</ul>
+	<% empty %>
+		<p><% gt "No pages" %></p>
+	<% end%>
+<h2><% gt "Latest Comments" %></h2>
+        <% foreach comment in comments %>
+	        <ul>
+        	<% item %>
+			<li><a href="<% url "/blog/post" using comment.post_id %>#comment_<%= comment.id %>"><%= comment.username %></a>, 
+			    <a href="<% url "/admin/comment" using comment.id %>"><% gt "edit" %></a></li>
+		<% end %>
+		</ul>
+	<% empty %>
+		<p><% gt "No comments" %></p>
+	<% end%>
+</div>
+<% end template %>
+<% end view  %>
+<% end skin %>
