@@ -1,0 +1,57 @@
+--- tests-magic/variable.expected.cpp	2014-09-01 19:19:32.755421301 +0200
++++ tmp/variable.cpp	2014-09-01 19:20:20.031799394 +0200
+@@ -16,26 +16,49 @@
+ 	}
+ #line 3 "tests-magic/variable.tmpl"
+ 	virtual void render(std::string ma) {
++#line 4 "tests-magic/variable.tmpl"
++	    out() << "  \n\t\t\t";
++#line 4 "tests-magic/variable.tmpl"
++	    out() << cppcms::filters::escape(content.
++					     foo("ala", ma, 3,
++						 content.koty));
+ #line 5 "tests-magic/variable.tmpl"
+-	    out() << "  \nmagic code here\n\t\t";
++	    out() << " <!-- magic --> \n\t\t";
+ #line 5 "tests-magic/variable.tmpl"
+ 	}			// end of template render
+ #line 6 "tests-magic/variable.tmpl"
+-	virtual void render2(std::string koty, foo ala) {
++	virtual void render2(std::string koty, blahblah foo) {
++#line 7 "tests-magic/variable.tmpl"
++	    out() << "  \n\t\t\t";
++#line 7 "tests-magic/variable.tmpl"
++	    out() << cppcms::filters::
++		escape(foo("ala", content.ma, -4, koty));
+ #line 8 "tests-magic/variable.tmpl"
+-	    out() << "  \nmagic code here\n\t\t";
++	    out() << " <!-- magic --> \n\t\t";
+ #line 8 "tests-magic/variable.tmpl"
+ 	}			// end of template render2
+ #line 9 "tests-magic/variable.tmpl"
+ 	virtual void show_list(data::list_t const &list) {
++#line 10 "tests-magic/variable.tmpl"
++	    out() << "  \n\t\t\t";
++#line 10 "tests-magic/variable.tmpl"
++	    out() << cppcms::filters::escape(content.
++					     foo("ala", content.ma, 3.1415,
++						 content.koty));
+ #line 11 "tests-magic/variable.tmpl"
+-	    out() << "  \nmagic code here\n\t\t";
++	    out() << " <!-- magic --> \n\t\t";
+ #line 11 "tests-magic/variable.tmpl"
+ 	}			// end of template show_list
+ #line 12 "tests-magic/variable.tmpl"
+ 	virtual void show_numbers(int x, int y, double z) {
++#line 13 "tests-magic/variable.tmpl"
++	    out() << " \n\t\t\t";
++#line 13 "tests-magic/variable.tmpl"
++	    out() << cppcms::filters::escape(content.
++					     foo("ala", content.ma,
++						 -0xbeef, content.koty));
+ #line 14 "tests-magic/variable.tmpl"
+-	    out() << " \nmagic code here\n\t\t";
++	    out() << " <!-- magic --> \n\t\t";
+ #line 14 "tests-magic/variable.tmpl"
+ 	}			// end of template show_numbers
+ #line 15 "tests-magic/variable.tmpl"

@@ -1,0 +1,16 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render(std::string ma) %>  
+			<%= foo("ala", ma, 3, koty) %> <!-- magic --> 
+		<% end template %>
+		<% template render2(std::string koty, blahblah foo) %>  
+			<%= foo("ala", ma, -4, koty) %> <!-- magic --> 
+		<% end template %>
+		<% template show_list(data::list_t const &list) %>  
+			<%= foo("ala", ma, 3.1415, koty) %> <!-- magic --> 
+		<% end template %>
+		<% template show_numbers(int x,int y, double z) %> 
+			<%= foo("ala", ma, -0xbeef, koty) %> <!-- magic --> 
+		<% end template %>
+	<% end view %> 
+<% end %>  

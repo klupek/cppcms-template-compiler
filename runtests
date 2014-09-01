@@ -1,15 +1,16 @@
 #!/bin/bash
 
 function runtest() {
-	name=$1
+	root="$1"
+	name="$2"
 	tmp=$(mktemp)
 	perl join_strings.pl  tmp/${name}.cpp > tmp/${name}.cpp.new && mv tmp/${name}.cpp{.new,}
 	perl -pe 's:\\":\\x22:g' -i tmp/${name}.cpp
 	indent -ut -kr tmp/${name}.cpp
-	if diff -au tests/${name}.expected.cpp tmp/${name}.cpp > $tmp; then
+	if diff -au ${root}/${name}.expected.cpp tmp/${name}.cpp > $tmp; then
 		echo "$name: OK";
 	else
-		if [ -f tests/${name}.diff ] && diff <(tail -n +3 $tmp) <(tail -n +3 tests/${name}.diff) >/dev/null; then
+		if [ -f ${root}/${name}.diff ] && diff <(tail -n +3 $tmp) <(tail -n +3 ${root}/${name}.diff) >/dev/null; then
 			echo "$name: diff OK"
 		else
 			echo "$name: FAILED";
@@ -22,6 +23,22 @@ function runtest() {
 }
 
 mkdir -p tmp;
+
+for f in tests-magic/*.tmpl; do
+	name=$(basename $f .tmpl)
+	if [ -f tests-magic/${name}.expected.cpp ]; then
+		arguments=""
+		if [ -f tests-magic/${name}.args ]; then 
+			arguments=$(cat tests-magic/${name}.args);
+		fi
+		./parser $f --code $arguments > tmp/${name}.cpp
+		runtest "tests-magic" $name;
+	else
+		echo "$name: no .expected file found"
+	fi
+done
+
+
 for f in tests/*.tmpl; do
 	name=$(basename "$f" .tmpl)
 	if [ -f tests/${name}.expected.cpp ]; then
@@ -29,12 +46,12 @@ for f in tests/*.tmpl; do
 		if [ -f tests/${name}.args ]; then 
 			arguments=$(cat tests/${name}.args);
 		fi
-		./parser $f --code > tmp/${name}.cpp $arguments
-		runtest $name
+		./parser $f --code $arguments  > tmp/${name}.cpp
+		runtest "tests" $name
 	else
 		echo "$name: no .expected file found"
 	fi
 done
 
 ./parser --code tests/tutorial-2*.tmpl-x > tmp/tutorial-2.cpp
-runtest "tutorial-2"
+runtest "tests" "tutorial-2"

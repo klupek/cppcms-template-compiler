@@ -132,23 +132,17 @@ namespace cppcms { namespace templates {
 		translate[static_cast<unsigned int>('\r')] = 'r';
 		translate[static_cast<unsigned int>('\t')] = 't';
 		translate[static_cast<unsigned int>('\v')] = 'v';
-		const char hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 		for(const char c : input) {
 			if(c == '"') {
 				result += "\\x22";
-			} else if(std::isprint(c)) {
+			} else if(c == '\\') {
+				result += '\\';
 				result += c;
-			} else if(translate[static_cast<int>(c)] > 0) {
+			} else if(translate[static_cast<unsigned char>(c)] > 0) {
 				result += '\\';
 				result += translate[static_cast<unsigned char>(c)];
-			} else if(c == '\'' || c == '"' || c == '\\') {
-				result += '\\';
+			} else { // if(std::isprint(c)) {
 				result += c;
-			} else {
-				result += '\\';
-				result += 'x';
-				result += hex[static_cast<unsigned char>(c)/16];
-				result += hex[static_cast<unsigned char>(c)%16];
 			}
 		}
 		return result;
@@ -164,25 +158,19 @@ namespace cppcms { namespace templates {
 		translate[static_cast<unsigned int>('\r')] = 'r';
 		translate[static_cast<unsigned int>('\t')] = 't';
 		translate[static_cast<unsigned int>('\v')] = 'v';
-		const char hex[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
 		for(size_t i = 1; i < input.length()-1; ++i) {
 			const char c = input[i];
 			if(c == '\\' && input[i+1] == '"') {
 				result += "\\x22";
 				++i;
-			} else if(std::isprint(c)) {
+			} else if(c == '\\') {
+				result += '\\';
 				result += c;
-			} else if(translate[static_cast<int>(c)] > 0) {
+			} else if(translate[static_cast<unsigned char>(c)] > 0) {
 				result += '\\';
 				result += translate[static_cast<unsigned char>(c)];
-			} else if(c == '\'' || c == '"' || c == '\\') {
-				result += '\\';
+			} else { // if(std::isprint(c)) {
 				result += c;
-			} else {
-				result += '\\';
-				result += 'x';
-				result += hex[static_cast<unsigned char>(c)/16];
-				result += hex[static_cast<unsigned char>(c)%16];
 			}
 		}
 		result += '"';
@@ -624,9 +612,23 @@ namespace cppcms { namespace templates {
 
 			if(c == '-' || c == '+')
 				c = source_.next();
-			if(c >= '0' && c <= '9') {
+			bool hex = false;
+			if(c == '0' && source_.has_next()) {
+				if(source_.next() == 'x') {
+					hex = true;
+					if(source_.has_next()) {	
+						c = source_.next(); // and if there is no next, c has value 'x' and next condition fails
+					} else {
+						hex = false;
+					}
+				} else {
+					source_.move(-1);
+				}
+			}
+
+			if((c >= '0' && c <= '9') || (hex && c >= 'a' && c <= 'f') || (hex && c >= 'A' && c <= 'F') ) {
 				bool dot = false;
-				for(; (c >= '0' && c <= '9') || (!dot && c == '.'); c = source_.next()) {
+				for(; (c >= '0' && c <= '9') || (!dot && c == '.') || (hex && c >= 'a' && c <= 'f') || (hex && c >= 'A' && c <= 'F'); c = source_.next()) {
 					if(c == '.')
 						dot = true;
 				}
@@ -659,7 +661,7 @@ namespace cppcms { namespace templates {
 			// parse *name((\.|->)name)
 			if(c == '*')
 				c = source_.next();
-			if(try_name().try_token("()") || back(1)) {
+			if(try_name().try_argument_list(out) || back(1)) {
 				// scan for ([.]|->)(NAME) blocks 
 				while(skipws(false).try_one_of_tokens({".","->"}).skipws(false).try_name().try_token("()") || back(1));
 
@@ -1910,6 +1912,162 @@ namespace cppcms { namespace templates {
 			return value_;
 		}
 
+		variable_t::variable_t(const std::string& input, bool consume_all, size_t* pos) 
+			: base_t(input) {
+			size_t index = 0;
+			size_t& i = ( pos == nullptr ? index : *pos );
+			
+			for(; i < input.length() && std::isspace(input[i]); ++i);
+
+			if(input[i] == '*') {
+				is_deref = true;
+				++i;
+			} else {
+				is_deref = false;
+			}
+			
+			for(; i < input.length() && std::isspace(input[i]); ++i);
+
+			std::string name;
+			std::vector<ptr> arguments;
+			bool function = false;
+			for(;i < input.length(); ++i) {
+				const char c = input[i];
+				if(c == '.') { // separator: .
+					parts.push_back({ name, arguments, ".", function });
+					arguments.clear();
+					function = false;
+					name.clear();
+				} else if(c == '-' && i < input.length()-1 && input[i+1] == '>') { // sperator: ->
+					++i;
+					parts.push_back({ name, arguments, "->", function });
+					arguments.clear();
+					function = false;
+					name.clear();
+				} else if(c == '(') {
+					arguments = parse_arguments(input, i);
+					--i;
+					function = true;
+				} else if(std::isspace(c)) {
+					break;
+				} else if(c == ',' || c == ')') {
+					break;
+				} else {
+					name += c;
+				}
+			}
+
+			if(!name.empty()) {
+				parts.push_back({ name, arguments, "", function });
+			}
+			
+			for(; i < input.length() && std::isspace(input[i]); ++i);
+
+			if(consume_all && i != input.length()) {
+				throw std::runtime_error("Parse error at variable expression, characters left: " + input.substr(i));
+			}
+		}
+
+		std::vector<ptr> variable_t::parse_arguments(const std::string& input, size_t& i) {
+			++i;
+			// clear whitespace between '(' and next token
+			for(; i < input.length() && std::isspace(input[i]); ++i);
+			std::vector<ptr> arguments;
+			ptr tmp;
+			bool separated = true;
+			for(; i < input.length(); ++i) {
+				const char c = input[i];
+				const bool has_next = (i < input.length()-1);
+				const char next = (has_next ? input[i+1] : 0);
+				if(separated && c == '"') {
+					tmp = parse_string(input, i);
+					--i;
+					arguments.push_back(tmp);
+					separated = false;
+				} else if( separated && (
+						(c == '-' && has_next && next >= '0' && next <= '9') ||
+						(c >= '0' && c <= '9')
+						) 
+					) {
+					tmp = parse_number(input, i);
+					--i;
+					arguments.push_back(tmp);
+					separated = false;
+				} else if(std::isspace(c)) {
+				} else if(c == ',') {
+					separated = true;
+				} else if(c == ')') {
+					break;
+				} else if(separated) {
+					tmp = std::make_shared<variable_t>(input, false, &i);
+					--i;
+					arguments.push_back(tmp);
+					separated = false;
+				} else {
+					throw std::runtime_error("argument is neither string, variable or number: " + input.substr(i));
+				}
+			}
+			if(i < input.length() && input[i] == ')') {
+				++i;
+				return arguments;
+			} else {
+				throw std::runtime_error("unterminated argument list");
+			}
+		}
+
+		ptr variable_t::parse_string(const std::string& input, size_t& i) {
+			bool escaped = false;
+			size_t start = i;
+			++i;
+			for(;i < input.length(); ++i) {
+				const char c = input[i];
+
+				if(c == '"' && !escaped) {
+					break;
+				} else if(c == '\\' && !escaped) {
+					escaped = true;
+				} else {
+					escaped = false;
+				}
+			}
+			if(i < input.length() && input[i] == '"') {
+				++i;
+				return make_string(input.substr(start, i-start));
+			} else {
+				throw std::runtime_error("unterminated string");
+			}
+		}
+
+		ptr variable_t::parse_number(const std::string& input, size_t& i) {
+			size_t start = i;
+			bool oct = false;
+			bool hex = false;
+			bool dot = false;
+			if(input[i] == '-' || input[i] == '+')
+				++i;
+
+			if(i < input.length()-2 && input[i] == '0' && input[i+1] == 'x') {
+				i += 2;
+				hex = true;
+			} else if(input[i] == '0') {
+				oct = true;
+			}
+
+			for(;i < input.length(); ++i) {
+				const char c = input[i];
+				if( (c >= '0' && c <= '7') ||
+					(!oct && c >= '8' && c <= '9') ||
+					(hex && c >= 'a' && c <= 'f') ||
+					(hex && c >= 'A' && c <= 'F')) {					
+				} else if(!dot && c == '.') {
+					dot = true;
+				} else {
+					break;
+				}
+			}
+			return make_number(input.substr(start, i-start));					
+		}
+
 		std::string variable_t::repr() const {
 			return value_;
 		}
@@ -1957,25 +2115,34 @@ namespace cppcms { namespace templates {
 		}
 
 		std::string variable_t::code(generator::context& context) const {
-			size_t name_beg = 0, name_end;
-			bool deref = false;
-			if(value_[name_beg] == '*') {
-				name_beg++;
-				deref = true;
+			std::ostringstream o;
+			if(is_deref) { 
+				o << "*";
 			}
-			for(name_end = name_beg+1; name_end < value_.length() && 
-					value_[name_end] != '-' && 
-					value_[name_end] != '.' && 
-					value_[name_end] != '('; ++name_end);
-			std::string varname = value_.substr(name_beg, name_end-name_beg);
-			const std::string right_of_varname = value_.substr(name_end);
 
-			
-			if(!context.check_scope_variable(varname)) {
-				// variable not in local scope, so prefix it with content.
-				varname = "content." + varname;
+			bool first = true;
+			for(const part_t& part : parts) {
+				if(!first || context.check_scope_variable(part.name)) {
+					o << part.name;
+				} else {
+					o << context.variable_prefix << part.name;
+				}
+
+				first = false;
+
+				if(part.is_function) {
+					o << "(";
+					for(auto i = part.arguments.begin(); i != part.arguments.end(); ++i) {
+						if(i != part.arguments.begin())
+							o << ", ";
+						o << (*i)->code(context);
+					}
+					o << ")";
+				}
+				o << part.separator;
 			}
-			return (deref ? "*" : "") + varname + right_of_varname;
+
+			return o.str();
 		}
 
 		std::string string_t::repr() const { 
