@@ -4,6 +4,10 @@ Why: for fun, for sport and to add some magic to templates
 What seems to be working:
 	- compiling templates used in cppcms projects into almost (see below) identical cpp code (using compatibility mode)
 
+Improvements:
+	- variables with unlimited arguments, which can be other variables
+	  - arguments which are variables are correctly prefixed with 'content.' when needed
+
 What needs to be done:
 	- more test cases, also negative (erroneous) ones
 	- better error reporting 
