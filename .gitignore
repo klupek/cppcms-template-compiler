@@ -3,6 +3,8 @@ tmp
 parser
 .*.swp
 tests/*.expected.cpp
+tests-magic/*.expected.cpp
+tests-magic/*.clean.cpp
 core.*
 test-output
 base-output

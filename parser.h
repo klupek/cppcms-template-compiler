@@ -145,10 +145,24 @@ namespace cppcms { namespace templates {
 		};
 
 		class variable_t : public base_t {
+			struct part_t {
+				const std::string name;
+				const std::vector<ptr> arguments;
+				const std::string separator;
+				const bool is_function;
+			};
+			bool is_deref;
+			std::vector<part_t> parts;
+			std::string name;
 		public:
-			using base_t::base_t;
+			variable_t(const std::string&, bool consume_all = true,  size_t* pos = nullptr);
+			
 			virtual std::string repr() const;
 			virtual std::string code(generator::context&) const;
+		private:
+			std::vector<ptr> parse_arguments(const std::string&, size_t&);			
+			ptr parse_string(const std::string&, size_t&);	
+			ptr parse_number(const std::string&, size_t&);	
 		};
 		
 		class string_t : public base_t {
