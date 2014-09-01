@@ -285,6 +285,11 @@ namespace cppcms { namespace templates {
 		bool context::check_scope_variable(const std::string& name) {
 			return scope_variables.find(name) != scope_variables.end();
 		}
+		
+		void context::add_include(const std::string& filename) {
+			includes.insert(filename);
+		}
+
 	}
 
 	std::pair<std::string, std::vector<file_index_t>> readfiles(const std::vector<std::string>& files) {
@@ -1618,7 +1623,7 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_render_expression() {
 		p.push();
 		std::string tmp2;
-		if(p.try_one_of_tokens({"gt", "pgt"}, tmp2)) {
+		if(p.try_one_of_tokens({"gt", "pgt", "format", "rformat"}, tmp2)) {
 			std::string tmp;
 			if(!p.skipws(false).try_string(tmp)) {
 				p.raise("expected STRING");
@@ -2412,7 +2417,7 @@ namespace cppcms { namespace templates {
 			return shared_from_this();
 		}
 
-		void root_t::write(generator::context& context, std::ostream& o) {
+		void root_t::write(generator::context& context, std::ostream& output) {			
 			// checks
 			// check if there is at least one skin
 			if(skins.empty()) {
@@ -2432,39 +2437,46 @@ namespace cppcms { namespace templates {
 					skins.erase(i);
 				}
 			}
+
+			std::ostringstream buffer;
 			
 			for(const code_t& code : codes) {
-				o << ln(code.line) << code.code->code(context) << std::endl;
+				buffer << ln(code.line) << code.code->code(context) << std::endl;
 			}
-
+			
 			for(const skins_t::value_type& skin : skins) {
 				if(!context.skin.empty() && context.skin != skin.first.repr())
 					throw error_at_line("Mismatched skin names, in argument and template source", skin.second.line);
-				o << ln(skin.second.line);
-				o << "namespace " << skin.first.code(context) << " {\n";
+				buffer << ln(skin.second.line);
+				buffer << "namespace " << skin.first.code(context) << " {\n";
 				context.current_skin = skin.first.repr();
 				for(const view_set_t::value_type& view : skin.second.views) {
-					view.second->write(context, o);
+					view.second->write(context, buffer);
 				}
-				o << ln(skin.second.endline);
-				o << "} // end of namespace " << skin.first.code(context) << "\n";
+				buffer << ln(skin.second.endline);
+				buffer << "} // end of namespace " << skin.first.code(context) << "\n";
 			}
 			file_position_t pll = skins.rbegin()->second.endline; // past last line
 			pll.line++;
 
 			for(const auto& skinpair : context.skins) {
-				o << "\n" << ln(pll) << "namespace {\n" << ln(pll) << "cppcms::views::generator my_generator;\n" << ln(pll) << "struct loader {";
-				o << ln(pll) << "loader() {\n" << ln(pll);			
-				o << "my_generator.name(\"" << skinpair.first << "\");\n";
+				buffer << "\n" << ln(pll) << "namespace {\n" << ln(pll) << "cppcms::views::generator my_generator;\n" << ln(pll) << "struct loader {";
+				buffer << ln(pll) << "loader() {\n" << ln(pll);			
+				buffer << "my_generator.name(\"" << skinpair.first << "\");\n";
 				for(const auto& view : skinpair.second.views) {
-					o << ln(pll) << "my_generator.add_view< " << skinpair.first << "::" << view.name << ", " << view.data << " >(\"" << view.name << "\", true);\n";
+					buffer << ln(pll) << "my_generator.add_view< " << skinpair.first << "::" << view.name << ", " << view.data << " >(\"" << view.name << "\", true);\n";
 				}
-				o << ln(pll) << "cppcms::views::pool::instance().add(my_generator);\n";
-				o << ln(pll) << "}\n";
-				o << ln(pll) << "~loader() { cppcms::views::pool::instance().remove(my_generator); }\n";
-				o << ln(pll) << "} a_loader;\n";
-				o << ln(pll) << "} // anon \n";
+				buffer << ln(pll) << "cppcms::views::pool::instance().add(my_generator);\n";
+				buffer << ln(pll) << "}\n";
+				buffer << ln(pll) << "~loader() { cppcms::views::pool::instance().remove(my_generator); }\n";
+				buffer << ln(pll) << "} a_loader;\n";
+				buffer << ln(pll) << "} // anon \n";
 			}
+			
+			for(const generator::context::include_t& include : context.includes) {
+				output << "#include <" << include << ">\n";
+			}
+			output << buffer.str();
 		}
 		
 		void view_t::write(generator::context& context, std::ostream& o) {
@@ -2658,9 +2670,10 @@ namespace cppcms { namespace templates {
 		}
 
 		std::string variable_t::code(generator::context& context, const std::string& escaper) const {
-			const std::string escape = escaper + "(";
+			const std::string escape = ( escaper.empty() ? "" : escaper + "(" );
+			const std::string close = ( escaper.empty() ? "" : ")" );
 			if(filters_.empty()) {				
-				return escape + name_->code(context) + ")";
+				return escape + name_->code(context) + close;
 			} else {
 				std::string current = name_->code(context);
 				for(auto i = filters_.rbegin(); i != filters_.rend(); ++i) {
@@ -2706,6 +2719,7 @@ namespace cppcms { namespace templates {
 		void fmt_function_t::write(generator::context& context, std::ostream& o) {						
 			o << ln(line());
 			std::string function_name;
+
 			if(name_ == "gt") {
 				function_name = "cppcms::locale::translate";
 			} else if(name_ == "url") {
@@ -2714,9 +2728,24 @@ namespace cppcms { namespace templates {
 					o << ", " << uo.code(context, "cppcms::filters::urlencode");
 				}
 				o << ");\n";
-				return; 
-			} else {
-				// TODO	
+				return;
+			} else if(name_ == "format") {
+				context.add_include("boost/format.hpp");
+				o << "out() << cppcms::filters::escape("
+					<< "(boost::format(" << fmt_->code(context) << ")";
+				for(const using_option_t& uo : using_options_) {
+					o << "% (" << uo.code(context, "") << ")";					
+				}
+				o << ").str());";
+				return;
+			} else if(name_ == "rformat") {
+				context.add_include("boost/format.hpp");
+				o << "out() << (boost::format(" << fmt_->code(context) << ")";
+				for(const using_option_t& uo : using_options_) {
+					o << "% (" << uo.code(context, "") << ")";					
+				}
+				o << ").str();";
+				return;
 			}
 			if(using_options_.empty()) {
 				o << "out() << " << function_name << "(" << fmt_->code(context) << ");\n";

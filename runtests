@@ -15,6 +15,9 @@ function runtest() {
 		else
 			echo "$name: FAILED";
 			cat $tmp
+			if [ -f ${root}/${name}.diff ]; then
+				diff -u <(tail -n +3 $tmp) <(tail -n +3 ${root}/${name}.diff)
+			fi
 			unlink "$tmp"
 			exit;
 		fi				

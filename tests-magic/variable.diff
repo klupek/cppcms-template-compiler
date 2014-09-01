@@ -16,8 +16,7 @@
  #line 5 "tests-magic/variable.tmpl"
  	}			// end of template render
  #line 6 "tests-magic/variable.tmpl"
--	virtual void render2(std::string koty, foo ala) {
-+	virtual void render2(std::string koty, blahblah foo) {
+ 	virtual void render2(std::string koty, blahblah foo) {
 +#line 7 "tests-magic/variable.tmpl"
 +	    out() << "  \n\t\t\t";
 +#line 7 "tests-magic/variable.tmpl"
