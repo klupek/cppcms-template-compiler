@@ -1623,7 +1623,7 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_render_expression() {
 		p.push();
 		std::string tmp2;
-		if(p.try_one_of_tokens({"gt", "pgt", "format", "rformat"}, tmp2)) {
+		if(p.try_one_of_tokens({"gt", "format", "rformat"}, tmp2)) {
 			std::string tmp;
 			if(!p.skipws(false).try_string(tmp)) {
 				p.raise("expected STRING");
