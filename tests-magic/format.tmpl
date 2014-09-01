@@ -1,0 +1,20 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %> 
+			format with using 
+			<% format "price: %.02f" using item->price %> <!-- magic -->
+		<% end template %>
+		<% template render2(std::string koty, blahblah foo) %>  
+			rformat
+			<% rformat "blah" %> <!-- magic -->
+		<% end template %>
+		<% template show_list(person_t const & person) %> 
+			format with using
+			<% format "name = %s, age = %03d" using  person.name | downcase, person.age  %> <!-- magic -->
+		<% end template %>
+		<% template show_numbers(int x,int y) %>
+			rformat with one using 
+			<% rformat "a = %03d, b = %02d, c = \"%.03f\"" using x, y, z %> <!-- magic -->
+		<% end template %>
+	<% end view %> 
+<% end %>  

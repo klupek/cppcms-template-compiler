@@ -54,11 +54,14 @@ namespace cppcms { namespace templates {
 			std::string current_skin;
 
 			// runtime state (with loadable defaults)
+			typedef std::string include_t;
+			std::set<include_t> includes;
 			std::string variable_prefix;
 			std::string output_mode;
 			void add_scope_variable(const std::string& name);
 			void remove_scope_variable(const std::string& name);
 			bool check_scope_variable(const std::string& name);
+			void add_include(const std::string& include);
 
 			// configurables
 			std::string skin;
@@ -153,7 +156,6 @@ namespace cppcms { namespace templates {
 			};
 			bool is_deref;
 			std::vector<part_t> parts;
-			std::string name;
 		public:
 			variable_t(const std::string&, bool consume_all = true,  size_t* pos = nullptr);
 			
@@ -336,8 +338,9 @@ namespace cppcms { namespace templates {
 			struct code_t {
 				file_position_t line;
 				expr::cpp code;
-			};
+			};			
 			std::vector<code_t> codes;			
+
 			typedef std::list< std::pair< expr::name_t, view_ptr> > view_set_t;
 			struct skin_t {
 				file_position_t line, endline;

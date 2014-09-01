@@ -8,6 +8,15 @@ Improvements:
 	- variables with unlimited arguments, which can be other variables
 	  - arguments which are variables are correctly prefixed with 'content.' when needed
 
+	- format and rformat - interface for boost::format
+	  - <% format "x = %.02f" using x %> /* or rformat */
+	  - format escapes result, escape((boost::format("...") % (x)).str())
+	  - rformat is UNSAFE, does not escape nothing
+	  - example: <% rformat "<li data-foo=\"%s\" data-bar=\"%s\"/>" using foo | escape, bar | escape %>
+	  - boost/format.hpp is only required when format/rformat is used.
+
+	
+
 What needs to be done:
 	- more test cases, also negative (erroneous) ones
 	- better error reporting 
