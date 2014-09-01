@@ -136,19 +136,14 @@ namespace cppcms { namespace templates {
 		for(const char c : input) {
 			if(c == '"') {
 				result += "\\x22";
-			} else if(std::isprint(c)) {
+			} else if(c == '\\') {
+				result += '\\';
 				result += c;
-			} else if(translate[static_cast<int>(c)] > 0) {
+			} else if(translate[static_cast<unsigned char>(c)] > 0) {
 				result += '\\';
 				result += translate[static_cast<unsigned char>(c)];
-			} else if(c == '\'' || c == '"' || c == '\\') {
-				result += '\\';
+			} else { // if(std::isprint(c)) {
 				result += c;
-			} else {
-				result += '\\';
-				result += 'x';
-				result += hex[static_cast<unsigned char>(c)/16];
-				result += hex[static_cast<unsigned char>(c)%16];
 			}
 		}
 		return result;
@@ -170,19 +165,14 @@ namespace cppcms { namespace templates {
 			if(c == '\\' && input[i+1] == '"') {
 				result += "\\x22";
 				++i;
-			} else if(std::isprint(c)) {
+			} else if(c == '\\') {
+				result += '\\';
 				result += c;
-			} else if(translate[static_cast<int>(c)] > 0) {
+			} else if(translate[static_cast<unsigned char>(c)] > 0) {
 				result += '\\';
 				result += translate[static_cast<unsigned char>(c)];
-			} else if(c == '\'' || c == '"' || c == '\\') {
-				result += '\\';
+			} else { // if(std::isprint(c)) {
 				result += c;
-			} else {
-				result += '\\';
-				result += 'x';
-				result += hex[static_cast<unsigned char>(c)/16];
-				result += hex[static_cast<unsigned char>(c)%16];
 			}
 		}
 		result += '"';
