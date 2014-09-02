@@ -14,6 +14,11 @@ Improvements:
 	  - rformat is UNSAFE, does not escape nothing
 	  - example: <% rformat "<li data-foo=\"%s\" data-bar=\"%s\"/>" using foo | escape, bar | escape %>
 	  - boost/format.hpp is only required when format/rformat is used.
+	
+	- "if"/"elif" conditions with "and" and "or" support
+	  - only natural order is supported (that means: (a and b or c and d) is evaluated as ((a && b) || (c && d)), because parenthesed expressions would conflict with if ([cppcode]))
+	  - unlimited number of ((and|or) (condition)) is supported
+
 
 	
 

@@ -520,20 +520,25 @@ namespace cppcms { namespace templates {
 		class if_t : public has_children {
 		public:	
 			enum class type_t { if_regular, if_empty, if_rtl, if_cpp, if_else };
-		private:
 			class condition_t : public has_children {
 				const type_t type_;
 				const expr::cpp cond_;
 				const expr::variable variable_;
 				const bool negate_;
 			public:
+				enum class next_op_t { op_or, op_and };
+			private:
+				std::vector<std::pair<std::shared_ptr<condition_t>, next_op_t>> next;
+			public:
 				condition_t(file_position_t line, type_t type, const expr::cpp& cond, const expr::variable& variable, bool negate, base_ptr parent);
+				void add_next(const next_op_t& no, const type_t& type, const expr::variable& variable, bool negate);
 				type_t type() const;
 				virtual void dump(std::ostream& o, int tabs = 0) const;
 				virtual void write(generator::context& context, std::ostream& o);
 				virtual base_ptr end(const std::string& what, file_position_t line);
 			};
 			typedef std::shared_ptr<condition_t> condition_ptr;
+		private:
 			std::vector< condition_ptr > conditions_;
 		public:
 			if_t(file_position_t line, base_ptr parent);
