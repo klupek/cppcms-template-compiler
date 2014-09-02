@@ -1,0 +1,71 @@
+--- tests-magic/if.expected.cpp	2014-09-02 22:35:41.067071745 +0200
++++ tmp/if.cpp	2014-09-02 22:36:53.020312307 +0200
+@@ -16,28 +16,62 @@
+ 	}
+ #line 3 "tests-magic/if.tmpl"
+ 	virtual void render() {
++#line 5 "tests-magic/if.tmpl"
++	    out() << " \n\t\t\tif (a and b)\t\t\t\n\t\t\t";
++#line 5 "tests-magic/if.tmpl"
++	    if (content.a.x && content.b.valid()) {
++#line 5 "tests-magic/if.tmpl"
++		out() << " true ";
++#line 5 "tests-magic/if.tmpl"
++	    }			// endif
+ #line 6 "tests-magic/if.tmpl"
+-	    out() << " \n\t\t\tif (a and b)\t\t\t\nmagic code here\n\t\t";
++	    out() << " <!-- magic -->\n\t\t";
+ #line 6 "tests-magic/if.tmpl"
+ 	}			// end of template render
+ #line 7 "tests-magic/if.tmpl"
+ 	virtual void render2() {
++#line 9 "tests-magic/if.tmpl"
++	    out() << "  \n\t\t\tif (a or b)\t\t\t\n\t\t\t";
++#line 9 "tests-magic/if.tmpl"
++	    if (!(content.a.x) || !(content.b.valid())) {
++#line 9 "tests-magic/if.tmpl"
++		out() << " false ";
++#line 9 "tests-magic/if.tmpl"
++	    }			// endif
+ #line 10 "tests-magic/if.tmpl"
+-	    out() << "  \n\t\t\tif (a or b)\t\t\t\nmagic code here\n\t\t";
++	    out() << " <!-- magic -->\n\t\t";
+ #line 10 "tests-magic/if.tmpl"
+ 	}			// end of template render2
+ #line 11 "tests-magic/if.tmpl"
+ 	virtual void render3() {
++#line 13 "tests-magic/if.tmpl"
++	    out() << "  \n\t\t\tif (a and b or c and not d)\t\t\t\n\t\t\t";
++#line 13 "tests-magic/if.tmpl"
++	    if (content.a.x && content.b || content.c
++		&& !(content.d.valid())) {
++#line 13 "tests-magic/if.tmpl"
++		out() << " false ";
++#line 13 "tests-magic/if.tmpl"
++	    }			// endif
+ #line 14 "tests-magic/if.tmpl"
+-	    out() <<
+-		"  \n\t\t\tif (a and b or c and not d)\t\t\t\nmagic code here\n\t\t";
++	    out() << " <!-- magic -->\n\t\t";
+ #line 14 "tests-magic/if.tmpl"
+ 	}			// end of template render3
+ #line 15 "tests-magic/if.tmpl"
+ 	virtual void render4() {
+-#line 18 "tests-magic/if.tmpl"
++#line 17 "tests-magic/if.tmpl"
+ 	    out() <<
+-		"  \n\t\t\tif (a and rtl or c and not empty d)\t\t\t\nmagic code here\n\t\t";
++		"  \n\t\t\tif (a and rtl or c and not empty d)\t\t\t\n\t\t\t";
++#line 17 "tests-magic/if.tmpl"
++	    if (content.a.x
++		&& (cppcms::locale::translate("LTR").str(out().getloc()) ==
++		    "RTL") || content.c && !(content.d.empty())) {
++#line 17 "tests-magic/if.tmpl"
++		out() << " false ";
++#line 17 "tests-magic/if.tmpl"
++	    }			// endif
++#line 18 "tests-magic/if.tmpl"
++	    out() << " <!-- magic -->\n\t\t";
+ #line 18 "tests-magic/if.tmpl"
+ 	}			// end of template render4
+ #line 19 "tests-magic/if.tmpl"

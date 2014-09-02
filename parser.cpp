@@ -1255,11 +1255,11 @@ namespace cppcms { namespace templates {
 		std::string tmp2;
 		if(p.try_one_of_tokens({"if", "elif"}, tmp2).skipws(true)) {
 			const std::string verb = tmp2;
-			std::string tmp;
+			std::string tmp;			
 			expr::cpp cond;
 			expr::variable variable;
 			ast::if_t::type_t type = ast::if_t::type_t::if_regular;
-			bool negate = false;
+			bool negate = false;			
 			if(p.try_token_ws("not")) {
 				negate = true;
 			} else {
@@ -1277,6 +1277,49 @@ namespace cppcms { namespace templates {
 				type = ast::if_t::type_t::if_cpp;
 			} else {
 				p.raise("expected [not] [empty] ([variable]|rtl) or ( c++ expr )");
+			}
+				
+			struct next_t {
+				ast::if_t::condition_t::next_op_t op;
+				bool next_negate = false;
+				ast::if_t::type_t next_type = ast::if_t::type_t::if_regular;
+				expr::variable next_variable;
+			};
+			std::vector<next_t> next;
+
+			if(type != ast::if_t::type_t::if_cpp) {
+				while(p.skipws(false).try_one_of_tokens({"or", "and"}, tmp)) {
+					next_t x;
+					if(tmp == "and") {
+						x.op = ast::if_t::condition_t::next_op_t::op_and;
+					} else {
+						x.op = ast::if_t::condition_t::next_op_t::op_or;
+					}
+
+					x.next_type = ast::if_t::type_t::if_regular;
+
+					p.skipws(false);
+
+					if(p.try_token_ws("not")) {
+						x.next_negate = true;
+					} else {
+						p.back(1);
+					}
+
+					if(p.try_token_ws("empty")) {
+						x.next_type = ast::if_t::type_t::if_empty;
+					} else {
+						p.back(1);
+					}
+
+					if(p.try_variable_ws(tmp)) {
+						x.next_variable = expr::make_variable(tmp);
+						next.push_back(x);
+					} else {
+						p.raise("expected VARIABLE");
+					}				
+				}
+				p.back(2);
 			}
 			if(!p.skipws(false).try_close_expression()) {
 				p.raise("expected %>");
@@ -1301,6 +1344,13 @@ namespace cppcms { namespace templates {
 				current_ = current_->as<ast::if_t>().add_condition(p.line(), ast::if_t::type_t::if_rtl, negate);
 			} else {
 				current_ = current_->as<ast::if_t>().add_condition(p.line(), type, variable, negate);
+			}
+			for(const next_t& x : next) {
+				if(x.next_type == ast::if_t::type_t::if_regular && x.next_variable->repr() == "rtl") {
+					current_->as<ast::if_t::condition_t>().add_next(x.op, ast::if_t::type_t::if_rtl, expr::variable(), x.next_negate);
+				} else {
+					current_->as<ast::if_t::condition_t>().add_next(x.op, x.next_type, x.next_variable, x.next_negate);
+				}
 			}
 		} else if(p.reset().try_token_ws("else").try_close_expression()) {
 			if(current_->sysname() == "condition") {
@@ -1623,7 +1673,7 @@ namespace cppcms { namespace templates {
 	bool template_parser::try_render_expression() {
 		p.push();
 		std::string tmp2;
-		if(p.try_one_of_tokens({"gt", "pgt", "format", "rformat"}, tmp2)) {
+		if(p.try_one_of_tokens({"gt", "format", "rformat"}, tmp2)) {
 			std::string tmp;
 			if(!p.skipws(false).try_string(tmp)) {
 				p.raise("expected STRING");
@@ -3083,6 +3133,12 @@ namespace cppcms { namespace templates {
 		if_t::if_t(file_position_t line, base_ptr parent)
 			: has_children("if", line, true, parent) {}
 
+		void if_t::condition_t::add_next(const next_op_t& no, const type_t& type, const expr::variable& variable, bool negate) {
+			next.push_back({
+					std::make_shared<condition_t>(line(), type, expr::cpp(), variable, negate, parent()),
+					no });
+		}
+
 		base_ptr if_t::add_condition(file_position_t line, type_t type, bool negate) {
 			if(!conditions_.empty())
 				conditions_.back()->end(std::string(), line);
@@ -3145,24 +3201,36 @@ namespace cppcms { namespace templates {
 
 		void if_t::condition_t::dump(std::ostream& o, int tabs)  const {
 			const std::string p(tabs, '\t');
-			const std::string neg = (negate_ ? "not " : "");
-			switch(type_) {
-				case type_t::if_regular:
-					o << p << "if " << neg << "true: " << *variable_;
-					break;
-				case type_t::if_empty:
-					o << p << "if " << neg << "empty: " << *variable_;
-					break;
-				case type_t::if_rtl:
-					o << p << "if " << neg << "rtl";
-					break;
-				case type_t::if_cpp:
-					o << p << "if " << neg << "cpp: " << *cond_;
-					break;
-				case type_t::if_else:
-					o << p << "if else: ";
-					break;
+			auto printer = [&o,&p](const condition_t& self) {
+				const std::string neg = (self.negate_ ? "not " : "");
+				switch(self.type_) {
+					case type_t::if_regular:
+						o << p << neg << "true: " << *self.variable_;
+						break;
+					case type_t::if_empty:
+						o << p << neg << "empty: " << *self.variable_;
+						break;
+					case type_t::if_rtl:
+						o << p << neg << "rtl";
+						break;
+					case type_t::if_cpp:
+						o << p  << neg << "cpp: " << *self.cond_;
+						break;
+					case type_t::if_else:
+						o << p << "else: ";
+						break;
+				}
+			};
+			o << "if ";
+			printer(*this);
+			for(const auto& pair : next) {
+				if(pair.second == next_op_t::op_or)
+					o << " or ";
+				else 
+					o << " and ";
+				printer(*pair.first);
 			}
+
 			o << " [\n";
 			for(const base_ptr& bp : children) {
 				bp->dump(o, tabs+1);
@@ -3185,31 +3253,46 @@ namespace cppcms { namespace templates {
 				o << "if(";
 			}
 
-			if(negate_)
-				o << "!(";
+			auto printer = [&o,&context](const condition_t& self) {
+				if(self.negate_)
+					o << "!(";
 
-			switch(type_) {
-			case type_t::if_regular:
-				o << "" << variable_->code(context) << "";
-				break;
+				switch(self.type_) {
+				case type_t::if_regular:
+					o << "" << self.variable_->code(context) << "";
+					break;
 
-			case type_t::if_empty:
-				o << "" << variable_->code(context) << ".empty()";
-				break;
+				case type_t::if_empty:
+					o << "" << self.variable_->code(context) << ".empty()";
+					break;
 
-			case type_t::if_rtl:
-				o << "(cppcms::locale::translate(\"LTR\").str(out().getloc()) == \"RTL\")";
-				break;
+				case type_t::if_rtl:
+					o << "(cppcms::locale::translate(\"LTR\").str(out().getloc()) == \"RTL\")";
+					break;
+				
+				case type_t::if_cpp:
+					o << "" << self.cond_->code(context) << "";
+					break;
+
+				case type_t::if_else:
+					break;				
 			
-			case type_t::if_cpp:
-				o << "" << cond_->code(context) << "";
-				break;
+				}
 
-			case type_t::if_else:
-				break;				
+				if(self.negate_)
+					o << ")";
+			};
+
+			printer(*this);
+			for(const auto& pair : next) {
+				if(pair.second == next_op_t::op_or) {
+					o << " || ";
+				} else {
+					o << " && ";
+				}
+				printer(*pair.first);
 			}
-			if(negate_)
-				o << ")";
+			
 			
 			if(type_ != type_t::if_else) {
 				o << ") {\n";

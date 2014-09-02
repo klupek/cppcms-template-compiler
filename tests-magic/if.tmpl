@@ -1,0 +1,20 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render() %> 
+			if (a and b)			
+			<% if a.x and b.valid() %> true <% end %> <!-- magic -->
+		<% end template %>
+		<% template render2() %>  
+			if (a or b)			
+			<% if not a.x or not b.valid() %> false <% end %> <!-- magic -->
+		<% end template %>
+		<% template render3() %>  
+			if (a and b or c and not d)			
+			<% if a.x and b or c and not d.valid() %> false <% end %> <!-- magic -->
+		<% end template %>
+		<% template render4() %>  
+			if (a and rtl or c and not empty d)			
+			<% if a.x and rtl or c and not empty d %> false <% end %> <!-- magic -->
+		<% end template %>
+	<% end view %> 
+<% end %>  
