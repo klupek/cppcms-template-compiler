@@ -273,17 +273,20 @@ namespace cppcms { namespace templates {
 		class root_t;
 		class template_t;
 		class has_children;
+		class form_theme_t;
 
 		typedef std::shared_ptr<base_t> base_ptr;
 		typedef std::shared_ptr<view_t> view_ptr;
 		typedef std::shared_ptr<root_t> root_ptr;
 		typedef std::shared_ptr<template_t> template_ptr;
 		typedef std::shared_ptr<has_children> has_children_ptr;
+		typedef std::shared_ptr<form_theme_t> form_theme_ptr;
 		
 		typedef base_t& base_ref;
 		typedef view_t& view_ref;
-		typedef root_t& root_ref;
+		typedef root_t& root_ref;		
 		typedef template_t& template_ref;	
+		typedef form_theme_t& form_theme_ref;
 
 		class base_t : public std::enable_shared_from_this<base_t> {
 			std::string sysname_;
@@ -358,6 +361,7 @@ namespace cppcms { namespace templates {
 			base_ptr set_mode(const std::string& mode, file_position_t line);
 			base_ptr add_cpp(const expr::cpp& code, file_position_t line);
 			base_ptr add_view(const expr::name& name, file_position_t line, const expr::identifier& data, const expr::name& parent);
+			base_ptr add_form_theme(const expr::name& name, file_position_t line, const expr::name& parent);
 			std::string mode() const;
 			virtual void dump(std::ostream& o, int tabs = 0) const;
 			virtual void write(generator::context& context, std::ostream& o);
@@ -366,16 +370,25 @@ namespace cppcms { namespace templates {
 		};	
 		
 		class view_t : public base_t {
+		protected:
 			typedef std::vector<std::pair<expr::name_t, template_ptr>> templates_t;
 			templates_t templates;
 			const expr::name name_, master_;
 			const expr::identifier data_;
 			file_position_t endline_;
 		public:
-			base_ptr add_template(const expr::name& name, file_position_t line, const expr::param_list& arguments);
+			base_ptr add_template(const expr::name& name, file_position_t line, const std::vector<expr::identifier> template_arguments, const expr::param_list& arguments);
 			virtual void dump(std::ostream& o, int tabs = 0) const;
 			view_t(const expr::name& name, file_position_t line, const expr::identifier& data, const expr::name& master, base_ptr parent);
 			virtual void write(generator::context& context, std::ostream& o);
+			virtual base_ptr end(const std::string& what, file_position_t line);
+		};
+
+		class form_theme_t : public view_t {
+		public:
+			virtual void dump(std::ostream& o, int tabs = 0) const;
+			form_theme_t(const expr::name& name, file_position_t line, const expr::name& master, base_ptr parent);
+			void init();
 			virtual base_ptr end(const std::string& what, file_position_t line);
 		};
 		
@@ -407,9 +420,10 @@ namespace cppcms { namespace templates {
 
 		class template_t : public has_children {
 			const expr::name name_;
+			const std::vector<expr::identifier> template_arguments_;
 			const expr::param_list arguments_;
 		public:
-			template_t(const expr::name& name, file_position_t line, const expr::param_list& arguments, base_ptr parent);
+			template_t(const expr::name& name, file_position_t line, const std::vector<expr::identifier>& template_arguments, const expr::param_list& arguments, base_ptr parent);
 			virtual void dump(std::ostream& o, int tabs = 0) const;
 			virtual void write(generator::context& context, std::ostream& o);
 			virtual base_ptr end(const std::string& what, file_position_t line);

@@ -19,6 +19,12 @@ Improvements:
 	  - only natural order is supported (that means: (a and b or c and d) is evaluated as ((a && b) || (c && d)), because parenthesed expressions would conflict with if ([cppcode]))
 	  - unlimited number of ((and|or) (condition)) is supported
 
+	- templates with generic (template) arguments
+	  usage:
+	  	<% template print_something<T>(T & something) %>
+		which is translated to template<typename T> void print_something(T & something) 
+	  only useful for <% include print_something(x) %>
+
 
 	
 

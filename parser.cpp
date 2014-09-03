@@ -1242,7 +1242,9 @@ namespace cppcms { namespace templates {
 				else
 					current_path += " / " + i->sysname();
 			}
-			const std::string msg = "\ncurrent object stack: " + current_path;
+			const std::string msg = "\ncurrent object stack: " + current_path 
+				+ "\nmaybe you forgot about <% end %>?";
+
 			p.raise(e.what() + msg);	
 		} catch(const std::runtime_error& e) {
 			p.raise(e.what());
@@ -1561,10 +1563,55 @@ namespace cppcms { namespace templates {
 				p.reset().raise("expected %> after view definition");
 			}
 			p.pop();
+		} else if(p.reset().try_token_ws("theme")) {
+			p.push();
+			std::string view_name, parent_name;
+			if(p.try_name_ws(view_name)) { // [ view, NAME, \s+ , uses, \s+, IDENTIFIER, \s+]
+				p.push();
+				if(!p.try_token_ws("extends").try_name(parent_name)) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
+					p.reset();
+				}
+				p.pop();
+			} else {
+				p.reset().raise("expected form theme NAME [extends NAME]");
+			}
+			if(p.try_close_expression()) {
+				expr::name parent_name_ = (parent_name.empty() ? expr::name() : expr::make_name(parent_name));
+				current_ = current_->as<ast::root_t>().add_form_theme(
+					expr::make_name(view_name), 
+					p.line(),
+					parent_name_);
+#ifdef PARSER_TRACE
+				std::cout << "global: form theme " << view_name << "/" << data_name << "/" << parent_name << "\n";
+#endif
+			} else {
+				p.reset().raise("expected %> after view definition");
+			}
+			p.pop();
 		} else if(p.reset().try_token_ws("template")) { // [ template, \s+, name, arguments, %> ]			
 			std::string function_name, arguments;
 			token_sink argsink(arguments);
-			if(!p.try_name(function_name).try_param_list(argsink).try_close_expression()) {
+			std::vector<expr::identifier> template_arguments;
+			if(!p.try_name(function_name)) {
+				p.raise("expected NAME(params...) %>");
+			}
+			if(p.try_token("<")) {
+				std::string id, token;
+				while(p.skipws(false).try_identifier(id).skipws(false).try_one_of_tokens({",",">"}, token)) {
+					template_arguments.push_back(expr::make_identifier(id));
+					if(token == ">") {
+						break;
+					}
+				}
+				if(token != ">") {
+					p.raise("expected <arg1, arg2, ...>");
+				}
+
+			} else {
+				p.back(1);
+			}
+
+			if(!p.try_param_list(argsink).try_close_expression()) {
 				p.raise("expected NAME(params...) %>");
 			}
 
@@ -1596,6 +1643,7 @@ namespace cppcms { namespace templates {
 			current_ = current_->as<ast::view_t>().add_template(
 					expr::make_name(function_name),
 					p.line(),
+					template_arguments,
 					expr::make_param_list(arguments, params));
 #ifdef PARSER_TRACE
 			std::cout << "global: template " << function_name << "\n";
@@ -2433,7 +2481,24 @@ namespace cppcms { namespace templates {
 			codes.emplace_back(code_t { line, code });
 			return shared_from_this();
 		}
-			
+		
+		base_ptr root_t::add_form_theme(const expr::name& name, file_position_t line, const expr::name& parent) {
+			if(current_skin == skins.end())
+				throw std::runtime_error("form theme must be inside skin");
+		
+			auto i = std::find_if(current_skin->second.views.begin(), current_skin->second.views.end(), [=](const view_set_t::value_type& ve) {
+				return ve.first.repr() == name->repr();
+			});
+			if(i == current_skin->second.views.end()) {
+				current_skin->second.views.emplace_back(
+					*name, std::make_shared<form_theme_t>(name, line, parent, shared_from_this())
+				);
+				i = --current_skin->second.views.end();
+				i->second->as<ast::form_theme_t>().init();
+			}
+			return i->second;
+		}
+
 		base_ptr root_t::add_view(const expr::name& name, file_position_t line, const expr::identifier& data, const expr::name& parent) {
 			if(current_skin == skins.end())
 				throw std::runtime_error("view must be inside skin");
@@ -2600,7 +2665,18 @@ namespace cppcms { namespace templates {
 		}
 
 		void template_t::write(generator::context& context, std::ostream& o) {
-			o << ln(line()) << "virtual void " << name_->code(context) << arguments_->code(context) << "{\n";
+			if(!template_arguments_.empty()) {
+				o << ln(line()) << "template<";
+				for(auto i = template_arguments_.begin(); i != template_arguments_.end(); ++i) {
+					const expr::identifier& x = *i;
+					if(i != template_arguments_.begin()) 
+						o << ", ";
+					o << "typename " << x->code(context);
+				}
+				o << ">\n" << ln(line()) << "void " << name_->code(context) << arguments_->code(context) << "{\n";
+			} else {
+				o << ln(line()) << "virtual void " << name_->code(context) << arguments_->code(context) << "{\n";
+			}
 			for(const auto& param : arguments_->params()) {
 				context.add_scope_variable(param.name->code(context));
 			}
@@ -2614,9 +2690,9 @@ namespace cppcms { namespace templates {
 			o << ln(endline_) << "} // end of template " << name_->code(context) << "\n";
 		}
 
-		base_ptr view_t::add_template(const expr::name& name, file_position_t line, const expr::param_list& arguments) {
+		base_ptr view_t::add_template(const expr::name& name, file_position_t line, const std::vector<expr::identifier> template_arguments, const expr::param_list& arguments) {
 			templates.emplace_back(
-				*name, std::make_shared<template_t>(name, line, arguments, shared_from_this())
+				*name, std::make_shared<template_t>(name, line, template_arguments, arguments, shared_from_this())
 			);
 			return templates.back().second; 
 		}
@@ -2641,6 +2717,57 @@ namespace cppcms { namespace templates {
 			}
 			o << p << "}\n";
 		}
+		
+		form_theme_t::form_theme_t(const expr::name& name, file_position_t line, const expr::name& master, base_ptr parent)
+			: view_t(name, line, expr::make_identifier("cppcms::themed_form"), master, parent) {}
+
+		void form_theme_t::init() {
+			const std::string dispatcher_code = R"c++(
+	// FIXME: as i do not see any better way, detect using rtti
+	// FIXME: also, i don't have idea for good namespace name for themed<> struct, so use cppcms::widgets::themed<> for now
+#define WIDGET(type) \
+	if(typeid(widget) == typeid(cppcms::widgets::themed::type)) { \
+		this->type(dynamic_cast<cppcms::widgets::themed::type&>(widget)); \
+	} else 
+
+	WIDGET(text)
+	WIDGET(hidden)
+	WIDGET(textarea)
+//	WIDGET(numeric)
+	WIDGET(password)
+	WIDGET(regex_field)
+	WIDGET(email)
+	WIDGET(checkbox)
+	WIDGET(select_multiple)
+	WIDGET(select)
+	WIDGET(file)
+	WIDGET(submit)
+	WIDGET(radio)
+	else {
+		throw std::logic_error("could not detect type of widget: " + std::string(typeid(widget)).name());
+	}
+#undef WIDGET
+			)c++";
+			expr::param_list_t::params_t args;
+			args.push_back({ expr::make_identifier("cppcms::widgets::base_widget"), false, true, expr::make_name("widget") });
+			expr::param_list plist = expr::make_param_list("(cppcms::widgets::base_widget & widget)", args);
+			base_ptr dispatcher = add_template(expr::make_name("render_single_widget"), line(), {}, plist);
+			dispatcher->as<ast::template_t>().add<ast::cppcode_t>(expr::make_cpp(dispatcher_code), line());
+		}
+
+		void form_theme_t::dump(std::ostream& o, int tabs) const {
+			o << std::string(tabs, '\t') << "form theme\n";
+			view_t::dump(o, tabs+1);
+		}
+		
+		base_ptr form_theme_t::end(const std::string& what,file_position_t line) {
+			if(what.empty() || what == "theme") {
+				endline_ = line;
+				return parent();
+			} else {
+				throw std::runtime_error("expected 'end theme', not 'end " + what + "'");
+			}
+		}
 			
 		has_children::has_children(const std::string& sysname, file_position_t line, bool block, base_ptr parent) 
 			: base_t(sysname, line, block, parent)
@@ -2658,9 +2785,10 @@ namespace cppcms { namespace templates {
 			}
 		}
 
-		template_t::template_t(const expr::name& name, file_position_t line, const expr::param_list& arguments, base_ptr parent) 
+		template_t::template_t(const expr::name& name, file_position_t line, const std::vector<expr::identifier>& template_arguments, const expr::param_list& arguments, base_ptr parent) 
 			: has_children("template", line, true, parent)
 	       		, name_(name) 
+	    		, template_arguments_(template_arguments)
 			, arguments_(arguments) {}
 
 		base_ptr template_t::end(const std::string& what,file_position_t line) {

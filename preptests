@@ -25,7 +25,7 @@ done
 
 for f in tests-magic/*.tmpl; do
 	name=$(basename "$f" .tmpl)
-	perl -pe 's:^.*<!-- magic -->.*$:magic code here:g' $f > tmp/magic-${name}.clean.tmpl
+	perl -pe 's:^.*<!-- magic -->.*$:magic code here:g' $f | awk '/<!-- cut magic begin -->/{f=0;print ""; next} /<!-- cut magic end -->/{f=1;print ""; next} BEGIN{f=1} { if(f) { print $0 } else print "" }' > tmp/magic-${name}.clean.tmpl
 	cppcms_tmpl_cc -o tests-magic/${name}.expected.cpp tmp/magic-${name}.clean.tmpl
 	sed "s:tmp/magic-${name}.clean.tmpl:tests-magic/${name}.tmpl:g" -i tests-magic/${name}.expected.cpp
 	prep "tests-magic" "$name"
