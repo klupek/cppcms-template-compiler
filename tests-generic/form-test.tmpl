@@ -1,0 +1,9 @@
+<%c++ #include <cppcms/themed_form.h> %>
+<%c++ #include "data-test.h" %>
+<% skin whatever %>
+	<% view test uses data::test %>
+		<% template render() %>
+			<% render bootstrap_horizontal with formdata %>
+		<% end %>
+	<% end %>
+<% end %>

@@ -1242,7 +1242,9 @@ namespace cppcms { namespace templates {
 				else
 					current_path += " / " + i->sysname();
 			}
-			const std::string msg = "\ncurrent object stack: " + current_path;
+			const std::string msg = "\ncurrent object stack: " + current_path 
+				+ "\nmaybe you forgot about <% end %>?";
+
 			p.raise(e.what() + msg);	
 		} catch(const std::runtime_error& e) {
 			p.raise(e.what());
@@ -1556,6 +1558,31 @@ namespace cppcms { namespace templates {
 					parent_name_);
 #ifdef PARSER_TRACE
 				std::cout << "global: view " << view_name << "/" << data_name << "/" << parent_name << "\n";
+#endif
+			} else {
+				p.reset().raise("expected %> after view definition");
+			}
+			p.pop();
+		} else if(p.reset().try_token_ws("theme")) {
+			p.push();
+			std::string view_name, parent_name;
+			if(p.try_name_ws(view_name)) { // [ view, NAME, \s+ , uses, \s+, IDENTIFIER, \s+]
+				p.push();
+				if(!p.try_token_ws("extends").try_name(parent_name)) { // [ view, NAME, \s+, uses, \s+, IDENTIFIER, \s+, extends, \s+ NAME, \s+ ] 
+					p.reset();
+				}
+				p.pop();
+			} else {
+				p.reset().raise("expected form theme NAME [extends NAME]");
+			}
+			if(p.try_close_expression()) {
+				expr::name parent_name_ = (parent_name.empty() ? expr::name() : expr::make_name(parent_name));
+				current_ = current_->as<ast::root_t>().add_form_theme(
+					expr::make_name(view_name), 
+					p.line(),
+					parent_name_);
+#ifdef PARSER_TRACE
+				std::cout << "global: form theme " << view_name << "/" << data_name << "/" << parent_name << "\n";
 #endif
 			} else {
 				p.reset().raise("expected %> after view definition");
@@ -2433,7 +2460,24 @@ namespace cppcms { namespace templates {
 			codes.emplace_back(code_t { line, code });
 			return shared_from_this();
 		}
-			
+		
+		base_ptr root_t::add_form_theme(const expr::name& name, file_position_t line, const expr::name& parent) {
+			if(current_skin == skins.end())
+				throw std::runtime_error("form theme must be inside skin");
+		
+			auto i = std::find_if(current_skin->second.views.begin(), current_skin->second.views.end(), [=](const view_set_t::value_type& ve) {
+				return ve.first.repr() == name->repr();
+			});
+			if(i == current_skin->second.views.end()) {
+				current_skin->second.views.emplace_back(
+					*name, std::make_shared<form_theme_t>(name, line, parent, shared_from_this())
+				);
+				i = --current_skin->second.views.end();
+				i->second->as<ast::form_theme_t>().init();
+			}
+			return i->second;
+		}
+
 		base_ptr root_t::add_view(const expr::name& name, file_position_t line, const expr::identifier& data, const expr::name& parent) {
 			if(current_skin == skins.end())
 				throw std::runtime_error("view must be inside skin");
@@ -2640,6 +2684,57 @@ namespace cppcms { namespace templates {
 				templ.second->dump(o, tabs+1);
 			}
 			o << p << "}\n";
+		}
+		
+		form_theme_t::form_theme_t(const expr::name& name, file_position_t line, const expr::name& master, base_ptr parent)
+			: view_t(name, line, expr::make_identifier("cppcms::themed_form"), master, parent) {}
+
+		void form_theme_t::init() {
+			const std::string dispatcher_code = R"c++(
+	// FIXME: as i do not see any better way, detect using rtti
+	// FIXME: also, i don't have idea for good namespace name for themed<> struct, so use cppcms::widgets::themed<> for now
+#define WIDGET(type) \
+	if(typeid(widget) == typeid(cppcms::widgets::themed::type)) { \
+		this->type(dynamic_cast<cppcms::widgets::themed::type&>(widget)); \
+	} else 
+
+	WIDGET(text)
+	WIDGET(hidden)
+	WIDGET(textarea)
+//	WIDGET(numeric)
+	WIDGET(password)
+	WIDGET(regex_field)
+	WIDGET(email)
+	WIDGET(checkbox)
+	WIDGET(select_multiple)
+	WIDGET(select)
+	WIDGET(file)
+	WIDGET(submit)
+	WIDGET(radio)
+	else {
+		throw std::logic_error("could not detect type of widget: " + std::string(typeid(widget)).name());
+	}
+#undef WIDGET
+			)c++";
+			expr::param_list_t::params_t args;
+			args.push_back({ expr::make_identifier("cppcms::widgets::base_widget"), false, true, expr::make_name("widget") });
+			expr::param_list plist = expr::make_param_list("(cppcms::widgets::base_widget & widget)", args);
+			base_ptr dispatcher = add_template(expr::make_name("render_single_widget"), line(), plist);
+			dispatcher->as<ast::template_t>().add<ast::cppcode_t>(expr::make_cpp(dispatcher_code), line());
+		}
+
+		void form_theme_t::dump(std::ostream& o, int tabs) const {
+			o << std::string(tabs, '\t') << "form theme\n";
+			view_t::dump(o, tabs+1);
+		}
+		
+		base_ptr form_theme_t::end(const std::string& what,file_position_t line) {
+			if(what.empty() || what == "theme") {
+				endline_ = line;
+				return parent();
+			} else {
+				throw std::runtime_error("expected 'end theme', not 'end " + what + "'");
+			}
 		}
 			
 		has_children::has_children(const std::string& sysname, file_position_t line, bool block, base_ptr parent) 

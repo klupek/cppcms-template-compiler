@@ -1,0 +1,156 @@
+<% skin whatever %>
+	<% theme bootstrap_horizontal %>
+		<% template render() %>
+			<% foreach widget in fields() %>
+			<% item %>
+				<% if widget->valid() %>
+				<div class="control-group">
+				<% else %>
+				<div class="control-group error">
+				<% end %>
+					<% include render_single_widget(widget) %>
+				</div>
+			<% end %>
+			<% end %>
+			<div class="form-actions">
+			<% foreach widget in actions() %>
+			<% item %>
+				<% include render_single_widget(*widget) %>
+			<% end %>
+			<% end %>
+			</div>
+		<% end %>		
+		<% template generic(cppcms::widgets::themed::base &widget) %>
+			<label class="control-label" for="<%= widget.name() %>">
+				<%= widget.message() | raw %>
+			</label>
+			<div class="controls">
+				<input type="<%= widget.type() %>" <%= widget.attributes_string() | raw %> <% if widget.set() %>value="<%= widget.value() %>" <% end %> />
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+		<% end %>
+		<% template textarea(cppcms::widgets::themed::textarea &widget) %>
+			<label class="control-label" for="<%= widget.name() %>">
+				<%= widget.message() | raw %>
+			</label>
+			<div class="controls">
+				<textarea 
+					<%= widget.attributes_string() | raw %>
+					<% if (widget.rows() > 0) %>
+					rows="<%= widget.rows() %>"
+					<% end %>
+					<% if (widget.cols() > 0) %>
+					cols="<%= widget.cols() %>"
+					<% end %>
+				>
+					<% if widget.set() %>
+						<%= widget.value() %>" 
+					<% end %>
+				</textarea>
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+		<% end %>
+		<% template text(cppcms::widgets::themed::text &widget) %>
+			<% include generic(widget) %>
+		<% end %>
+		<% template hidden(cppcms::widgets::themed::hidden &widget) %>
+			<% include generic(widget) %> 
+		<% end %>
+		<% template password(cppcms::widgets::themed::password &widget) %>
+			<% include generic(widget) %>
+		<% end %>
+		<% template regex_field(cppcms::widgets::themed::regex_field &widget) %>
+			<% include generic(widget) %>
+		<% end %>
+		<% template email(cppcms::widgets::themed::email &widget) %>
+			<% include generic(widget) %>
+		<% end %>
+		<% template submit(cppcms::widgets::themed::submit &widget) %>
+			<% include generic(widget) %>
+		<% end %>
+		<% template checkbox(cppcms::widgets::themed::checkbox &widget) %>
+			<div class="controls">
+				<label for="<%= widget.name() %>" class="checkbox">
+					<input type="<%= widget.type() %>" <%= widget.attributes_string() %> <% if widget.set() and widget.value() %>checked="checked"<% end %> />					
+				</label>
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+		<% end %>
+		<% template select(cppcms::widgets::themed::select &widget) %>
+			<label class="control-label" for="<%= widget.name() %>">
+				<%= widget.message() | raw %>
+			</label>
+			<div class="controls">
+				<select <%= widget.attributes_string() %>>
+				<% foreach option in widget.elements() %>
+					<% item %>
+					<option value="<%= option.id | raw %>" <% if option.selected %>selected="selected"<% end %>>
+						<%= option.title | raw %>
+					</option>
+					<% end %>
+				<% end %>
+				</select>
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+			
+		<% end %>
+		<% template select_multiple(cppcms::widgets::themed::select_multiple &widget) %>
+			<label class="control-label" for="<%= widget.name() %>">
+				<%= widget.message() | raw %>
+			</label>
+			<div class="controls">
+				<select <%= widget.attributes_string() %> multiple="multiple">
+				<% foreach option in widget.elements() %>
+					<% item %>
+					<option value="<%= option.id | raw %>" <% if option.selected %>selected="selected"<% end %>>
+						<%= option.title | raw %>
+					</option>
+					<% end %>
+				<% end %>
+				</select>
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+		<% end %>
+		<% template file(cppcms::widgets::themed::file &widget) %>
+			<label class="control-label" for="<%= widget.name() %>">
+				<%= widget.message() | raw %>
+			</label>
+			<div class="controls">
+				<input type="<%= widget.type() %>" <%= widget.attributes_string() | raw %> />
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+		<% end %>
+		<% template radio(cppcms::widgets::themed::radio &widget) %>
+			<div class="controls">
+				<% foreach option in widget.elements() %>
+					<% item %>
+					<label for="<%= widget.name() %>" class="radio">
+						<input type="radio" 
+							name=<%= widget.name() %>" 							
+							value="<%= option.id %>"
+							<% if option.selected %>checked="checked"<% end %>
+							<% if widget.disabled() %>disabled="disabled"<% end %>
+							/>
+						<%= option.title | raw %>
+					</label>
+					<% end %>
+				<% end %>
+				<% if not widget.valid() %>
+				<span class="help-inline"><%= widget.error_message() %></span>
+				<% end %>
+			</div>
+		<% end %>
+	<% end theme %>
+<% end skin %>
