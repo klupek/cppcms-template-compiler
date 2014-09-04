@@ -75,7 +75,7 @@ namespace cppcms { namespace templates {
 					case '\\':
 						result += current;
 						break;
-					case '"': result += "\\x22"; break;
+					case '"': result += "\\\""; break;
 					case 'a': result += '\a'; break;
 					case 'b': result += '\b'; break;
 					case 'f': result += '\f'; break;
@@ -134,7 +134,7 @@ namespace cppcms { namespace templates {
 		translate[static_cast<unsigned int>('\v')] = 'v';
 		for(const char c : input) {
 			if(c == '"') {
-				result += "\\x22";
+				result += "\\\"";
 			} else if(c == '\\') {
 				result += '\\';
 				result += c;
@@ -161,7 +161,7 @@ namespace cppcms { namespace templates {
 		for(size_t i = 1; i < input.length()-1; ++i) {
 			const char c = input[i];
 			if(c == '\\' && input[i+1] == '"') {
-				result += "\\x22";
+				result += "\\\"";
 				++i;
 			} else if(c == '\\') {
 				result += '\\';
@@ -3126,7 +3126,7 @@ namespace cppcms { namespace templates {
 		
 		void csrf_t::write(generator::context&, std::ostream& o) {
 			if(!style_) {
-				o << ln(line()) << "out() << \"<input type=\\x22hidden\\x22 name=\\x22_csrf\\x22 value=\\x22\" << content.app().session().get_csrf_token() << \"\\x22 >\\n\"\n;";
+				o << ln(line()) << "out() << \"<input type=\\\"hidden\\\" name=\\\"_csrf\\\" value=\\\"\" << content.app().session().get_csrf_token() << \"\\\" >\\n\"\n;";
 			} else if(style_->repr() == "token") {
 				o << ln(line()) << "out() << content.app().session().get_csrf_token();\n";
 			} else if(style_->repr() == "script")  {
