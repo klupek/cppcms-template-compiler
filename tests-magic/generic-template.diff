@@ -1,0 +1,44 @@
+--- tests-magic/generic-template.expected.cpp	2014-09-03 16:38:41.966234339 +0200
++++ tmp/generic-template.cpp	2014-09-04 18:19:33.092979173 +0200
+@@ -1,3 +1,4 @@
++#include <boost/format.hpp>
+ #line 1 "tests-magic/generic-template.tmpl"
+ namespace myskin {
+ #line 2 "tests-magic/generic-template.tmpl"
+@@ -14,6 +15,36 @@
+ 	{
+ #line 2 "tests-magic/generic-template.tmpl"
+ 	}
++#line 3 "tests-magic/generic-template.tmpl"
++	template < typename T >
++#line 3 "tests-magic/generic-template.tmpl"
++	void printer(T & x) {
++#line 4 "tests-magic/generic-template.tmpl"
++	    out() << "<!-- cut magic begin -->\n\t\t\t";
++#line 4 "tests-magic/generic-template.tmpl"
++	    out() << cppcms::filters::escape(x.name);
++#line 5 "tests-magic/generic-template.tmpl"
++	    out() << "\n\t\t\t";
++#line 5 "tests-magic/generic-template.tmpl"
++	    generic_printer(x.first, x.second);
++#line 6 "tests-magic/generic-template.tmpl"
++	    out() << "\n\t\t";
++#line 6 "tests-magic/generic-template.tmpl"
++	}			// end of template printer
++#line 7 "tests-magic/generic-template.tmpl"
++	template < typename T1, typename T2 >
++#line 7 "tests-magic/generic-template.tmpl"
++	void generic_printer(T1 a, T2 b) {
++#line 8 "tests-magic/generic-template.tmpl"
++	    out() << "\n\t\t\t";
++#line 8 "tests-magic/generic-template.tmpl"
++	    out() << cppcms::filters::
++		escape((boost::format("first = {1}, bar = {2}") % (a) %
++			(b)).str());
++#line 9 "tests-magic/generic-template.tmpl"
++	    out() << "\n\t\t<!-- cut magic end -->";
++#line 9 "tests-magic/generic-template.tmpl"
++	}			// end of template generic_printer
+ #line 11 "tests-magic/generic-template.tmpl"
+ 	virtual void render() {
+ #line 12 "tests-magic/generic-template.tmpl"
