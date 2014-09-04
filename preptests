@@ -4,7 +4,6 @@ function prep() {
 	root=$1
 	name=$2
 	perl join_strings.pl  ${root}/${name}.expected.cpp > ${root}/${name}.expected.cpp.new && mv ${root}/${name}.expected.cpp{.new,}
-	perl -pe 's:\\":\\x22:g' -i ${root}/${name}.expected.cpp
       	indent -ut -kr ${root}/${name}.expected.cpp
 	echo "$name: prepared";
 }

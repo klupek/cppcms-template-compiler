@@ -5,7 +5,6 @@ function runtest() {
 	name="$2"
 	tmp=$(mktemp)
 	perl join_strings.pl  tmp/${name}.cpp > tmp/${name}.cpp.new && mv tmp/${name}.cpp{.new,}
-	perl -pe 's:\\":\\x22:g' -i tmp/${name}.cpp
 	indent -ut -kr tmp/${name}.cpp
 	if diff -au ${root}/${name}.expected.cpp tmp/${name}.cpp > $tmp; then
 		echo "$name: OK";

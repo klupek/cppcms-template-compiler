@@ -34,7 +34,7 @@ What needs to be done:
 	- more magic 
 
 Known generated code differences (from original cppcms_tmpl_cc), using compat mode:
-	All result files from my and original cppcms_tmpl_cc are preprocessed (joined adjacent c-strings, replaced \" with \x22) and indented (using GNU indent) before comparing.
+	All result files from my and original cppcms_tmpl_cc are preprocessed (joined adjacent c-strings) and indented (using GNU indent) before comparing.
 	tests/tutorial-2*.tmpl-x - tests/tutorial-2.diff
 		#include moved to first line (when parsing multiple files)
 		collaped skin namespace(closing, opening the same namespace)
