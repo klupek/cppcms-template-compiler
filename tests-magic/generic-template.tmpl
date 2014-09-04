@@ -4,6 +4,9 @@
 			<%= x.name %>
 			<% include generic_printer(x.first, x.second) %>
 		<% end %> 
+		<% template foobar<T>(numeric<T> x) %> 
+			foobar
+		<% end template %>
 		<% template generic_printer<T1, T2>(T1 a, T2 b) %>
 			<% format "first = {1}, bar = {2}" using a, b %>
 		<!-- cut magic end --><% end %>

@@ -736,7 +736,22 @@ namespace cppcms { namespace templates {
 			source_.mark();
 
 			if(try_name()) {
-				while(try_token("::").try_name());
+				auto try_template_call_list = [this]() {
+					if(try_token("<")) {
+						std::string tmp;
+						while(try_identifier().skipws(false).try_one_of_tokens({",", ">"}, tmp)) {
+							if(tmp == ">") break;
+						}
+						if(tmp != ">") {
+							raise("expected <identifier list>");
+						}
+					} else {
+						back(1);
+					}
+					return *this;
+				};
+				try_template_call_list();
+				while(try_token("::").try_name() && try_template_call_list());
 				back(2);
 			
 				out.put(source_.right_from_mark());
