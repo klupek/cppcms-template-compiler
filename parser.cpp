@@ -1053,7 +1053,7 @@ namespace cppcms { namespace templates {
 		const int context = 70;
 		const std::string left = source_.left_context(context);
 		const std::string right = source_.right_context(context);
-		throw std::runtime_error("Parse error at line " + line().filename + ":" + boost::lexical_cast<std::string>(line().line) + ", file offset " +
+		throw parse_error("Parse error at line " + line().filename + ":" + boost::lexical_cast<std::string>(line().line) + ", file offset " +
 				boost::lexical_cast<std::string>(source_.index()) + " near '\n\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 		
 	}
 
@@ -1067,7 +1067,7 @@ namespace cppcms { namespace templates {
 		const std::string left = source_.left_context(context);
 		const std::string right = source_.right_context(context);		
 		source_.move_to(orig_index);
-		throw std::runtime_error("Error at file " + file.filename + ":" + boost::lexical_cast<std::string>(file.line) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
+		throw parse_error("Error at file " + file.filename + ":" + boost::lexical_cast<std::string>(file.line) + " near '\e[1;32m" + left + "\e[1;31m" + right + "\e[0m': " + msg); 
 	}
 
 	bool parser::failed() const {
@@ -1245,7 +1245,9 @@ namespace cppcms { namespace templates {
 			const std::string msg = "\ncurrent object stack: " + current_path 
 				+ "\nmaybe you forgot about <% end %>?";
 
-			p.raise(e.what() + msg);	
+			p.raise(e.what() + msg);
+		} catch(const parse_error&) {
+			throw;
 		} catch(const std::runtime_error& e) {
 			p.raise(e.what());
 		}

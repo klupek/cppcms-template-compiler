@@ -26,6 +26,10 @@ namespace cppcms { namespace templates {
 		const file_position_t& line() const;
 	};
 
+	class parse_error : public std::runtime_error {
+		using std::runtime_error::runtime_error;
+	};
+
 	// FIXME: make better (aka: copy of boost demangle) wrapper, or use newer (1.56) boost
 	inline std::string demangle(const char* name) {
 		std::size_t size = 0;
