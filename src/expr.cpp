@@ -477,6 +477,10 @@ namespace cppcms { namespace templates { namespace expr {
 	}
 
 	std::string variable_t::code(generator::context& context) const {
+		if(value_ == "true" || value_ == "false") {
+			return value_;
+		}
+
 		std::ostringstream o;
 		if(is_deref) { 
 			o << "*";
