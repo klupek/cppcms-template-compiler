@@ -1,5 +1,5 @@
 Features which do not break compatibility:
-	array subscript support (everywhere where "VARIABLE" is supported)
+	none
 
 Compat breaking optional features:
 	whitespace collapsing in html/xhtml.

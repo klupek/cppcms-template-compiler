@@ -24,6 +24,9 @@ Improvements:
 	  	<% template print_something<T>(T & something) %>
 		which is translated to template<typename T> void print_something(T & something) 
 	  only useful for <% include print_something(x) %>
+	
+	- array subscript support (everywhere where "VARIABLE" is supported)
+	  <%= foobar.array["blahblah"]()->baz[x] %>
 
 
 	

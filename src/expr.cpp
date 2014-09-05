@@ -273,15 +273,21 @@ namespace cppcms { namespace templates { namespace expr {
 				subscript = ptr();
 				name.clear();
 			} else if(c == '[') {
+				if(name.empty()) {
+					throw std::runtime_error("expected identifier before '['");
+				}
 				subscript = parse_subscript(input, i);
 				--i;			
 			} else if(c == '(') {
+				if(name.empty()) {
+					throw std::runtime_error("expected identifier before '['");
+				}
 				arguments = parse_arguments(input, i);
 				--i;
 				function = true;
 			} else if(std::isspace(c)) {
 				break;
-			} else if(c == ',' || c == ')') {
+			} else if(c == ',' || c == ')' || c == ']') {
 				break;
 			} else {
 				name += c;
@@ -300,6 +306,7 @@ namespace cppcms { namespace templates { namespace expr {
 	}
 
 	ptr variable_t::parse_subscript(const std::string& input, size_t& i) {	
+		++i;
 		// clear whitespace between '[' and next token
 		for(; i < input.length() && std::isspace(input[i]); ++i);
 
@@ -309,16 +316,14 @@ namespace cppcms { namespace templates { namespace expr {
 		const char next = ( has_next ? input[i+1] : 0 );
 		if(c == '"') {
 			result = parse_string(input, i);
-			--i;
 		} else if((c >= '0' && c <= '9') || ( has_next && next >= '0' && next <= '9' && (c == '-' || c == '+'))) {
 			result = parse_number(input, i);
-			--i;
 		} else {
 			result = std::make_shared<variable_t>(input, false, &i);
-			--i;
 		}
 		for(; i < input.length() && std::isspace(input[i]); ++i);
 		if(i < input.length() && input[i] == ']') {
+			++i;
 			return result;
 		} else {
 			throw std::runtime_error("subscript is neither string, variable or number: " + input.substr(i));

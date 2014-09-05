@@ -12,5 +12,8 @@
 		<% template show_numbers(int x,int y, double z) %> 
 			<%= foo("ala", ma, -0xbeef, koty) %> <!-- magic --> 
 		<% end template %>
+		<% template foobar(int x,int y, double z) %>
+			<%= foobar.array["blahblah"]()->baz[x].oof[3.14] %>  <!-- magic -->
+		<% end template %>
 	<% end view %> 
 <% end %>  

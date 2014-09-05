@@ -1,6 +1,6 @@
---- tests-magic/variable.expected.cpp	2014-09-01 19:19:32.755421301 +0200
-+++ tmp/variable.cpp	2014-09-01 19:20:20.031799394 +0200
-@@ -16,26 +16,49 @@
+--- tests-magic/variable.expected.cpp	2014-09-05 03:40:04.363036747 +0200
++++ tmp/variable.cpp	2014-09-05 03:40:09.509291530 +0200
+@@ -16,32 +16,61 @@
  	}
  #line 3 "tests-magic/variable.tmpl"
  	virtual void render(std::string ma) {
@@ -54,3 +54,16 @@
  #line 14 "tests-magic/variable.tmpl"
  	}			// end of template show_numbers
  #line 15 "tests-magic/variable.tmpl"
+ 	virtual void foobar(int x, int y, double z) {
++#line 16 "tests-magic/variable.tmpl"
++	    out() << "\n\t\t\t";
++#line 16 "tests-magic/variable.tmpl"
++	    out() << cppcms::filters::escape(content.foobar.
++					     array["blahblah"] ()->baz[x].
++					     oof[3.14]);
+ #line 17 "tests-magic/variable.tmpl"
+-	    out() << "\nmagic code here\n\t\t";
++	    out() << "  <!-- magic -->\n\t\t";
+ #line 17 "tests-magic/variable.tmpl"
+ 	}			// end of template foobar
+ #line 18 "tests-magic/variable.tmpl"
