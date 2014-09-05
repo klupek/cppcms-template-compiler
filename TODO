@@ -1,0 +1,9 @@
+Features which do not break compatibility:
+	array subscript support (everywhere where "VARIABLE" is supported)
+
+Compat breaking optional features:
+	whitespace collapsing in html/xhtml.
+	automagically include data/foobar.h when view uses data::foobar
+
+Checks:
+	check if include() function exists
