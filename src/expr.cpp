@@ -255,20 +255,26 @@ namespace cppcms { namespace templates { namespace expr {
 
 		std::string name;
 		std::vector<ptr> arguments;
+		ptr subscript;
 		bool function = false;
 		for(;i < input.length(); ++i) {
 			const char c = input[i];
 			if(c == '.') { // separator: .
-				parts.push_back({ name, arguments, ".", function });
+				parts.push_back({ name, arguments, ".", subscript, function });
 				arguments.clear();
 				function = false;
+				subscript = ptr();
 				name.clear();
-			} else if(c == '-' && i < input.length()-1 && input[i+1] == '>') { // sperator: ->
+			} else if(c == '-' && i < input.length()-1 && input[i+1] == '>') { // separator: ->
 				++i;
-				parts.push_back({ name, arguments, "->", function });
+				parts.push_back({ name, arguments, "->", subscript, function });
 				arguments.clear();
 				function = false;
+				subscript = ptr();
 				name.clear();
+			} else if(c == '[') {
+				subscript = parse_subscript(input, i);
+				--i;			
 			} else if(c == '(') {
 				arguments = parse_arguments(input, i);
 				--i;
@@ -283,13 +289,39 @@ namespace cppcms { namespace templates { namespace expr {
 		}
 
 		if(!name.empty()) {
-			parts.push_back({ name, arguments, "", function });
+			parts.push_back({ name, arguments, "", subscript, function });
 		}
 		
 		for(; i < input.length() && std::isspace(input[i]); ++i);
 
 		if(consume_all && i != input.length()) {
 			throw std::runtime_error("Parse error at variable expression, characters left: " + input.substr(i));
+		}
+	}
+
+	ptr variable_t::parse_subscript(const std::string& input, size_t& i) {	
+		// clear whitespace between '[' and next token
+		for(; i < input.length() && std::isspace(input[i]); ++i);
+
+		ptr result;
+		const char c = input[i];
+		const bool has_next = (i < input.length());
+		const char next = ( has_next ? input[i+1] : 0 );
+		if(c == '"') {
+			result = parse_string(input, i);
+			--i;
+		} else if((c >= '0' && c <= '9') || ( has_next && next >= '0' && next <= '9' && (c == '-' || c == '+'))) {
+			result = parse_number(input, i);
+			--i;
+		} else {
+			result = std::make_shared<variable_t>(input, false, &i);
+			--i;
+		}
+		for(; i < input.length() && std::isspace(input[i]); ++i);
+		if(i < input.length() && input[i] == ']') {
+			return result;
+		} else {
+			throw std::runtime_error("subscript is neither string, variable or number: " + input.substr(i));
 		}
 	}
 
@@ -453,8 +485,10 @@ namespace cppcms { namespace templates { namespace expr {
 				o << context.variable_prefix << part.name;
 			}
 
-			first = false;
-
+			if(part.subscript) {
+				o << "[" << part.subscript->code(context) << "]";
+			}
+			first = false;			
 			if(part.is_function) {
 				o << "(";
 				for(auto i = part.arguments.begin(); i != part.arguments.end(); ++i) {

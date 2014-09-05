@@ -224,7 +224,8 @@ namespace cppcms { namespace templates {
 	}
 
 	// VARIABLE is non-empty sequence of NAMES separated by dot "." or "->" that may optionally end with () or begin with * for 
-	// identification of function call result. No blanks are allowed. For example: data->point.x, something.else() *foo.bar.	
+	// identification of function call result. No blanks are allowed. For example: data->point.x, something.else() *foo.bar.
+	// Feature added: array subscript.	
 	parser& parser::try_variable(token_sink out) {
 #ifdef PARSER_DEBUG
 		std::cout << ">>>(" << failed_ << ") find var at '" << source_.right_context(20) << "'\n";
@@ -239,7 +240,20 @@ namespace cppcms { namespace templates {
 				c = source_.next();
 			if(try_name().try_argument_list(out) || back(1)) {
 				// scan for ([.]|->)(NAME) blocks 
-				while(skipws(false).try_one_of_tokens({".","->"}).skipws(false).try_name().try_token("()") || back(1));
+				while(skipws(false).try_one_of_tokens({".","->"}).skipws(false).try_name()) {
+					if(try_token("[").skipws(false)) {
+						if(!try_string() && !back(1).try_number() && !back(1).try_variable()) {
+							raise("expected STRING, VARIABLE or NUMBER as array subscript");
+						}
+						if(!skipws(false).try_token("]")) {
+							raise("expected closing ']' after array subscript");
+						}
+					} else {
+						back(2);
+					}
+					if(!try_token("()"))
+					       back(1);
+				}
 
 				// back from 4 failed attempts(ws, token, ws, name)
 				back(4);

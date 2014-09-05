@@ -79,6 +79,7 @@ namespace cppcms { namespace templates { namespace expr {
 			const std::string name;
 			const std::vector<ptr> arguments;
 			const std::string separator;
+			const ptr subscript;
 			const bool is_function;
 		};
 		bool is_deref;
@@ -92,6 +93,7 @@ namespace cppcms { namespace templates { namespace expr {
 		std::vector<ptr> parse_arguments(const std::string&, size_t&);			
 		ptr parse_string(const std::string&, size_t&);	
 		ptr parse_number(const std::string&, size_t&);	
+		ptr parse_subscript(const std::string&, size_t&);	
 	};
 	
 	class string_t : public base_t {
