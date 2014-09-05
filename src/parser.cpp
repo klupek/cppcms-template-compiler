@@ -239,6 +239,16 @@ namespace cppcms { namespace templates {
 			if(c == '*')
 				c = source_.next();
 			if(try_name().try_argument_list(out) || back(1)) {
+				if(try_token("[").skipws(false)) {
+					if(!try_string() && !back(1).try_number() && !back(1).try_variable()) {
+						raise("expected STRING, VARIABLE or NUMBER as array subscript");
+					}
+					if(!skipws(false).try_token("]")) {
+						raise("expected closing ']' after array subscript");
+					}
+				} else {
+					back(2);
+				}
 				// scan for ([.]|->)(NAME) blocks 
 				while(skipws(false).try_one_of_tokens({".","->"}).skipws(false).try_name()) {
 					if(try_token("[").skipws(false)) {
