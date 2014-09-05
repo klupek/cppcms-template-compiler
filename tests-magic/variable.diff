@@ -1,6 +1,6 @@
---- tests-magic/variable.expected.cpp	2014-09-05 03:40:04.363036747 +0200
-+++ tmp/variable.cpp	2014-09-05 03:40:09.509291530 +0200
-@@ -16,32 +16,61 @@
+--- tests-magic/variable.expected.cpp	2014-09-05 20:34:25.946017392 +0200
++++ tmp/variable.cpp	2014-09-05 20:36:23.447284438 +0200
+@@ -16,32 +16,66 @@
  	}
  #line 3 "tests-magic/variable.tmpl"
  	virtual void render(std::string ma) {
@@ -61,9 +61,14 @@
 +	    out() << cppcms::filters::escape(content.foobar.
 +					     array["blahblah"] ()->baz[x].
 +					     oof[3.14]);
- #line 17 "tests-magic/variable.tmpl"
--	    out() << "\nmagic code here\n\t\t";
-+	    out() << "  <!-- magic -->\n\t\t";
- #line 17 "tests-magic/variable.tmpl"
- 	}			// end of template foobar
++#line 17 "tests-magic/variable.tmpl"
++	    out() << "  <!-- magic -->\n\t\t\t";
++#line 17 "tests-magic/variable.tmpl"
++	    out() << content.money(content.cart_.
++				   delivery_price(content.dm));
  #line 18 "tests-magic/variable.tmpl"
+-	    out() << "\nmagic code here\nmagic code here\n\t\t";
++	    out() << " zł <!-- magic -->\n\t\t";
+ #line 18 "tests-magic/variable.tmpl"
+ 	}			// end of template foobar
+ #line 19 "tests-magic/variable.tmpl"

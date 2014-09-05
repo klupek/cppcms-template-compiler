@@ -36,7 +36,7 @@ for f in tests-magic/*.tmpl; do
 		if [ -f tests-magic/${name}.args ]; then 
 			arguments=$(cat tests-magic/${name}.args);
 		fi
-		$parser $f --code $arguments > tmp/${name}.cpp
+		$parser $f --code $arguments > tmp/${name}.cpp || exit 1
 		runtest "tests-magic" $name;
 	else
 		echo "$name: no .expected file found"

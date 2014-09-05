@@ -261,15 +261,17 @@ namespace cppcms { namespace templates {
 					} else {
 						back(2);
 					}
-					if(!try_token("()"))
-					       back(1);
+					
+					if(!try_argument_list()) {
+						back(1);
+					}
 				}
 
 				// back from 4 failed attempts(ws, token, ws, name)
 				back(4);
 
-				// add optional "()" token
-				if(!try_token("()"))
+				// add optional argument list
+				if(!try_argument_list())
 					back(1);
 
 				// return result
