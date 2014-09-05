@@ -132,7 +132,7 @@ namespace cppcms { namespace templates { namespace ast {
 		pll.line++;
 
 		for(const auto& skinpair : context.skins) {
-			buffer << "\n" << ln(pll) << "namespace {\n" << ln(pll) << "cppcms::views::generator my_generator;\n" << ln(pll) << "struct loader {";
+			buffer << "\n" << ln(pll) << "namespace {\n" << ln(pll) << "cppcms::views::generator my_generator;\n" << ln(pll) << "struct loader {\n";
 			buffer << ln(pll) << "loader() {\n" << ln(pll);			
 			buffer << "my_generator.name(\"" << skinpair.first << "\");\n";
 			for(const auto& view : skinpair.second.views) {
@@ -156,7 +156,7 @@ namespace cppcms { namespace templates { namespace ast {
 		o << ln(line());
 		o << "struct " << name_->code(context) << ":public ";
 		if(master_)
-			o << master_->code(context);
+			o << master_->code(context) << "\n";
 		else
 			o << "cppcms::base_view\n";
 		o << ln(line()) << " {\n";
@@ -630,7 +630,7 @@ namespace cppcms { namespace templates { namespace ast {
 	
 	void csrf_t::write(generator::context&, std::ostream& o) {
 		if(!style_) {
-			o << ln(line()) << "out() << \"<input type=\\\"hidden\\\" name=\\\"_csrf\\\" value=\\\"\" << content.app().session().get_csrf_token() << \"\\\" >\\n\"\n;";
+			o << ln(line()) << "out() << \"<input type=\\\"hidden\\\" name=\\\"_csrf\\\" value=\\\"\" << content.app().session().get_csrf_token() << \"\\\" >\\n\";\n";
 		} else if(style_->repr() == "token") {
 			o << ln(line()) << "out() << content.app().session().get_csrf_token();\n";
 		} else if(style_->repr() == "script")  {
