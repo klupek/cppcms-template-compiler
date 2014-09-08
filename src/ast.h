@@ -344,12 +344,12 @@ namespace cppcms { namespace templates { namespace ast {
 		const expr::name rowid_; // spec says it is identifier, but it is used as local scope variable name
 		const int from_;
 		const expr::variable array_;
-		const bool reverse_;
+		const bool reverse_, const_ref_;
 
 		has_children_ptr empty_, separator_, item_;
 		has_children_ptr item_prefix_, item_suffix_;
 	public:
-		foreach_t(file_position_t line, const expr::name& name, const expr::identifier& as, const expr::name& rowid, const int from, const expr::variable& array, bool reverse, base_ptr parent);
+		foreach_t(file_position_t line, const expr::name& name, const expr::identifier& as, const expr::name& rowid, const int from, const expr::variable& array, bool reverse, bool const_ref, base_ptr parent);
 		virtual void dump(std::ostream& o, int tabs = 0) const;
 		virtual void write(generator::context& context, std::ostream& o);
 		virtual base_ptr end(const std::string& what, file_position_t line);

@@ -980,10 +980,19 @@ namespace cppcms { namespace templates {
 #endif
 		// 'foreach' NAME ['as' IDENTIFIER ] [ 'rowid' IDENTIFIER [ 'from' NUMBER ] ] [ 'reverse' ] 'in' VARIABLE
 		} else if(p.reset().try_token_ws("foreach")) {
+			bool const_foreach = false;
 			std::string tmp;
 			if(!p.try_name_ws(tmp)) {
 				p.raise("expected NAME");
 			}
+
+			if(tmp == "const") {
+				const_foreach = true;
+				if(!p.try_name_ws(tmp)) {
+					p.raise("expected NAME");
+				}
+			}
+
 
 			const expr::name item_name = expr::make_name(tmp);
 			expr::identifier as;
@@ -1022,7 +1031,7 @@ namespace cppcms { namespace templates {
 			}
 
 			// save to tree		
-			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(p.line(), item_name, as, rowid, from, variable, reverse);
+			current_ = current_->as<ast::has_children>().add<ast::foreach_t>(p.line(), item_name, as, rowid, from, variable, reverse, const_foreach);
 			current_ = current_->as<ast::foreach_t>().prefix(p.line());
 #ifdef PARSER_TRACE
 			std::cout << "flow: foreach (" << item_name << " in " << variable << "; rowid " << rowid << ", reverse " << reverse << ", as " << as << ", from " << from << "\n";

@@ -942,14 +942,15 @@ namespace cppcms { namespace templates { namespace ast {
 	foreach_t::foreach_t(	file_position_t line, 
 				const expr::name& name, const expr::identifier& as, 
 				const expr::name& rowid, const int from,
-				const expr::variable& array, bool reverse, base_ptr parent) 
+				const expr::variable& array, bool reverse, bool const_ref, base_ptr parent) 
 		: base_t("foreach", line, true, parent) 
 		, name_(name)
 		, as_(as)
 		, rowid_(rowid)
 		, from_(from)
 		, array_(array) 
-		, reverse_(reverse) {}
+		, reverse_(reverse) 
+		, const_ref_(const_ref) {}
 		
 	void foreach_t::dump(std::ostream& o, int tabs)  const {
 		const std::string p(tabs, '\t');
@@ -1030,7 +1031,10 @@ namespace cppcms { namespace templates { namespace ast {
 			o << ") {\n";
 
 		o << ln(item_->line());
-		o << vtype <<" & " << item << " = *" << item << "_ptr;\n";
+		if(const_ref_)
+			o << vtype <<" const & " << item << " = *" << item << "_ptr;\n";
+		else
+			o << vtype <<" & " << item << " = *" << item << "_ptr;\n";
 		
 		if(rowid_) 
 			context.add_scope_variable(rowid);

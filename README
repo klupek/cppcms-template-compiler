@@ -28,6 +28,10 @@ Improvements:
 	- array subscript support (everywhere where "VARIABLE" is supported)
 	  <%= foobar.array["blahblah"]()->baz[x] %>
 
+	- foreach with const referenced item
+	  useful for containers, where iterator returns temporary 
+	  <% foreach const item in container %>
+
 
 	
 

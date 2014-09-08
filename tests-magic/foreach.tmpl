@@ -1,0 +1,11 @@
+<% skin myskin %>  
+	<% view master uses data::master %>  
+		<% template render(std::string ma) %> 
+			<!-- cut magic begin -->
+			<% foreach const item in container %>
+			<% item %>item->name<% separator %>, 
+			<% end %>
+			<!-- cut magic end --> 
+		<% end template %>
+	<% end view %> 
+<% end %>  
