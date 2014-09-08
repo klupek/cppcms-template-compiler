@@ -7,3 +7,6 @@ Compat breaking optional features:
 
 Checks:
 	check if include() function exists
+
+Bugs:
+	check if there is no missing <% end %> at the EOF
