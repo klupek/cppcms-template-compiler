@@ -1168,7 +1168,7 @@ namespace cppcms { namespace templates { namespace ast {
 		o << ln(line()) << "{\n" << "std::string _cppcms_temp_val;\n";
 		o << ln(line()) << "\tif (content.app().cache().fetch_frame(" << name_->code(context) << ", _cppcms_temp_val))\n";
 		o << ln(line()) << "\t\tout() << _cppcms_temp_val;\n";
-		o << ln(line()) << "\telse {";
+		o << ln(line()) << "\telse {\n";
 		o << ln(line()) << "\t\tcppcms::copy_filter _cppcms_cache_flt(out());\n";
 		if(recording_) {
 			o << ln(line()) << "\t\tcppcms::triggers_recorder _cppcms_trig_rec(content.app().cache());\n";
