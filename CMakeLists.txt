@@ -13,3 +13,4 @@ SET (cppcms_tmpl_ccpp_SOURCES
 add_executable(cppcms_tmpl_ccpp ${cppcms_tmpl_ccpp_SOURCES})
 ENABLE_TESTING()
 add_test(NAME alltests COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/runtests ${CMAKE_CURRENT_BINARY_DIR}/cppcms_tmpl_ccpp)
+install(TARGETS cppcms_tmpl_ccpp RUNTIME DESTINATION bin)
