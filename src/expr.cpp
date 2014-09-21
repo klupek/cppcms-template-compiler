@@ -1,6 +1,8 @@
 #include "expr.h"
 #include <algorithm>
 #include <boost/lexical_cast.hpp>
+#include <stdexcept>
+
 namespace cppcms { namespace templates { namespace expr {
 	static std::string trim(const std::string& input) {
 		size_t beg = 0, end = input.length();

@@ -1,4 +1,5 @@
 #include "generator.h"
+#include <stdexcept>
 namespace cppcms { namespace templates { namespace generator {
 	void context::add_scope_variable(const std::string& name) {
 		if(!scope_variables.insert(name).second)

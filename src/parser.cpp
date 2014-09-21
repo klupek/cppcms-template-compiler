@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <boost/lexical_cast.hpp>
+#include <iostream>
 
 namespace cppcms { namespace templates {
 	static bool is_latin_letter(char c) {
